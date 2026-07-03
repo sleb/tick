@@ -67,17 +67,17 @@ Archive    0
 
 ## Commands
 
-| Command                                          | Description                                                                                                                                                                                                                                            |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `init [name]`                                    | Initialize a new PARA system                                                                                                                                                                                                                           |
-| `new [filename] [--project\|--area\|--resource]` | Capture a new note. Defaults to the Inbox; pass `--project` or `--area` to scaffold a directory with an `index.md`, or `--resource` for a flat file. Omit `filename` to capture in `$EDITOR`, which will suggest a name for you to confirm or override |
-| `daily`                                          | Create (or open) today's daily note in the Inbox                                                                                                                                                                                                       |
-| `mv <item> <category>`                           | Move a file or project/area directory to `inbox`, `project`, `area`, `resource`, or `archive`. Archiving preserves which category the item came from                                                                                                   |
-| `list <category> [filter]`                       | List items in a category (`inbox`, `project`, `area`, `resource`, or `archive`), optionally filtered by name                                                                                                                                           |
-| `status`                                         | Show item counts per category and flag stale projects/areas                                                                                                                                                                                            |
-| `review`                                         | Walk through projects and areas one by one for a weekly review                                                                                                                                                                                         |
-| `config [init\|edit] [-g\|--global]`              | View the effective config, or initialize/edit `.tick.toml`; `-g` targets `~/.tick.toml` instead of the local one                                                                                                                                       |
-| `completions <shell>`                            | Generate a shell completion script                                                                                                                                                                                                                     |
+| Command                                                   | Description                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init [name]`                                             | Initialize a new PARA system                                                                                                                                                                                                                                                                                                                        |
+| `new [filename] [--project\|--area\|--resource\|--daily]` | Capture a new note. Defaults to the Inbox; pass `--project` or `--area` to scaffold a directory with an `index.md`, or `--resource` for a flat file. Omit `filename` to capture in `$EDITOR`, which will suggest a name for you to confirm or override. `--daily` creates (or opens) today's note and takes no `filename`; see [`tk daily`](#daily) |
+| `daily`                                                   | Create (or open) today's daily note in the Inbox                                                                                                                                                                                                                                                                                                    |
+| `mv <item> <category>`                                    | Move a file or project/area directory to `inbox`, `project`, `area`, `resource`, or `archive`. Archiving preserves which category the item came from                                                                                                                                                                                                |
+| `list <category> [filter]`                                | List items in a category (`inbox`, `project`, `area`, `resource`, or `archive`), optionally filtered by name                                                                                                                                                                                                                                        |
+| `status`                                                  | Show item counts per category and flag stale projects/areas                                                                                                                                                                                                                                                                                         |
+| `review`                                                  | Walk through projects and areas one by one for a weekly review                                                                                                                                                                                                                                                                                      |
+| `config [init\|edit] [-g\|--global]`                      | View the effective config, or initialize/edit `.tick.toml`; `-g` targets `~/.tick.toml` instead of the local one                                                                                                                                                                                                                                    |
+| `completions <shell>`                                     | Generate a shell completion script                                                                                                                                                                                                                                                                                                                  |
 
 Files created without an extension default to `.md`.
 
@@ -100,12 +100,14 @@ $ ls my-para
 ### `new`
 
 ```
-tk new [filename] [--project | --area | --resource]
+tk new [filename] [--project | --area | --resource | --daily]
 ```
 
 Creates a new note. With no arguments, opens `$EDITOR` pre-populated with the category's rendered template — frontmatter and all, cursor positioned where the title goes — instead of a blank scratch file. Once you save and exit, Tick suggests a filename from what you wrote (or a timestamp, if you left the template unchanged or emptied the file) and prompts you to confirm it or type a different one before creating the note in the Inbox. With a `filename`, creates it directly — in the Inbox by default, or under `--project`, `--area`, or `--resource` if given — rendering the template non-interactively instead.
 
 For `--project` and `--area`, this scaffolds a directory named after `filename` containing an `index.md`, so the project can grow to hold other files. For `--resource` (and the Inbox), it's a single flat file.
+
+`--daily` creates (or opens) today's note in the Inbox — see [`tk daily`](#daily), which is sugar for `tk new --daily`. It doesn't take a `filename` (the name is always today's date) and can't be combined with `--project`/`--area`/`--resource`.
 
 ```
 $ tk new
@@ -126,11 +128,14 @@ Created ./1-Projects/my-project/index.md
 tk daily
 ```
 
-Creates (or opens) today's daily note in the Inbox, named for the current date.
+Creates (or opens) today's daily note in the Inbox, named for the current date. Sugar for `tk new --daily`. The first run of the day creates the note non-interactively from the `daily` template and prints its path; running it again the same day opens the existing note in `$EDITOR` instead of recreating it.
 
 ```
 $ tk daily
 Created ./0-Inbox/2026-06-30.md
+
+$ tk daily
+Opening $EDITOR...
 ```
 
 ### `mv`
@@ -148,6 +153,8 @@ Moved ./0-Inbox/my-file.md to ./1-Projects/my-file/index.md
 $ tk mv my-project archive
 Moved ./1-Projects/my-project to ./4-Archive/Projects/my-project
 ```
+
+Moving a `project`/`area` directory to `inbox` or `resource` (unwrapping a directory back into a flat file) is not yet supported — `tk mv` rejects it with an error rather than guessing which file to keep.
 
 ### `list`
 
@@ -318,13 +325,13 @@ last_updated: {{date}}
 
 Every category has a template: `note` is used for Inbox captures and `--resource` notes, `daily` for `tk daily`, and `project`/`area` for the `index.md` scaffolded by `tk new --project`/`--area`. Templates are plain text, filled in when the note is created, with these placeholders:
 
-| Placeholder  | Renders to                                                                                                                                                                                                                                                                                                                                 |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `{{date}}`   | Today's date (`2026-07-02`)                                                                                                                                                                                                                                                                                                               |
-| `{{time}}`   | The current time (`14:32`)                                                                                                                                                                                                                                                                                                                |
-| `{{title}}`  | The note's title. Filled in from the given `filename` when creating a note non-interactively. Left empty when the template is used to pre-populate `$EDITOR` for an editor capture (`tk new`, or `--project`/`--area`/`--resource` with no `filename`) — the title isn't known yet, since that's what the editor capture infers      |
+| Placeholder  | Renders to                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{{date}}`   | Today's date (`2026-07-02`)                                                                                                                                                                                                                                                                                                                                                           |
+| `{{time}}`   | The current time (`14:32`)                                                                                                                                                                                                                                                                                                                                                            |
+| `{{title}}`  | The note's title. Filled in from the given `filename` when creating a note non-interactively. Left empty when the template is used to pre-populate `$EDITOR` for an editor capture (`tk new`, or `--project`/`--area`/`--resource` with no `filename`) — the title isn't known yet, since that's what the editor capture infers                                                       |
 | `{{cursor}}` | Not rendered as text — marks the line where `$EDITOR`'s cursor should start, for the editor-capture paths above. Tick opens `$EDITOR` with a `+<line>` argument pointing at that line, the convention understood by vi/vim/neovim, nano, and `emacs -nw`; editors that don't support it just open at the top of the file. Renders as an empty string outside the editor-capture paths |
-| `{{uuid}}`   | A randomly generated unique id (e.g. `f47ac10b-58cc-4372-a567-0e02b2c3d479`), for Zettelkasten-style permanent note IDs. Not used in the built-in defaults above, but available in custom templates                                                                                                                                     |
+| `{{uuid}}`   | A randomly generated unique id (e.g. `f47ac10b-58cc-4372-a567-0e02b2c3d479`), for Zettelkasten-style permanent note IDs. Not used in the built-in defaults above, but available in custom templates                                                                                                                                                                                   |
 
 `tk config init` writes the defaults above as a starting point.
 

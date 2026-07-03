@@ -334,3 +334,32 @@
 - **Given:** I am inside an initialized PARA system with a custom `note` template containing `{{uuid}}`
 - **When:** I run `tk new first-note` followed by `tk new second-note`
 - **Then:** the two created files contain different rendered `{{uuid}}` values
+
+---
+
+## User Story 013
+
+- **Summary:** `--daily` scaffolds (or reopens) today's note without leaving `new`
+
+### Use Case
+
+- **As a** Tick user who thinks of `new`'s flags as the one place category behavior lives
+- **I want to** run `tk new --daily` alongside `--project`/`--area`/`--resource`
+- **so that** today's note is one more `new` variant instead of a separate command to remember
+
+### Acceptance Criteria
+
+- **Scenario:** `tk new --daily` is equivalent to `tk daily`
+- **Given:** I am inside an initialized PARA system with the default `daily` template
+- **When:** I run `tk new --daily`
+- **Then:** Tick behaves exactly as `tk daily` does (see [daily.md](daily.md)) — creating today's note non-interactively and printing the path if it doesn't exist yet, or opening it in `$EDITOR` if it does
+
+- **Scenario:** `--daily` doesn't accept a filename
+- **Given:** I am inside an initialized PARA system
+- **When:** I run `tk new some-name --daily`
+- **Then:** Tick rejects the command with an error, since the daily note's name is always derived from the current date, not a supplied filename — unlike `--project`/`--area`/`--resource`, which require or accept one
+
+- **Scenario:** `--daily` can't be combined with the other category flags
+- **Given:** I am inside an initialized PARA system
+- **When:** I run `tk new --daily --project`
+- **Then:** Tick rejects the command with an error, since `--daily`, `--project`, `--area`, and `--resource` are mutually exclusive

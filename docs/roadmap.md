@@ -71,10 +71,10 @@ plumbing that several later commands need, so it goes first in this group:
 ### 3. `tk daily`
 
 Straightforward once item 2 lands: resolve today's date, render the `daily`
-template, create-or-open in the Inbox. No user-stories file exists yet for
-this command — worth writing one (Given/When/Then for "note already exists
-today" vs. "first note of the day") before implementing, per this repo's TDD
-workflow.
+template, create-or-open in the Inbox. Implemented as sugar for `tk new
+--daily` — the `--daily` flag needs wiring alongside `--project`/`--area`/
+`--resource` from item 1, plus the create-vs-open branch on whether today's
+note already exists. Covers user-stories/daily.md and new.md story 013.
 
 ### 4. `tk list`
 
