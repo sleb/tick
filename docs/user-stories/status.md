@@ -37,6 +37,7 @@ Projects and areas are each sorted alphabetically by Name, matching `list`.
 
 - **Summary:** `status` prints a count per category
 - **Status:** Not started
+- **Depends on:** [new.md](new.md) Story 002, Story 003, Story 004, Story 005 (items to count across all five categories)
 
 ### Use Case
 
@@ -70,6 +71,7 @@ Projects and areas are each sorted alphabetically by Name, matching `list`.
 
 - **Summary:** Projects and Areas get a per-item breakdown showing how long ago each was updated
 - **Status:** Not started
+- **Depends on:** Story 001 (category counts), [list.md](list.md) Story 001, Story 005 (shared Name/Title inference convention)
 
 ### Use Case
 
@@ -114,6 +116,7 @@ Projects and areas are each sorted alphabetically by Name, matching `list`.
 
 - **Summary:** Each project/area row also shows how long ago it was last reviewed, or `never`
 - **Status:** Not started
+- **Depends on:** Story 002 (per-item row this fact is appended to), Story 004 (defines when `last_reviewed` is written)
 
 ### Use Case
 
@@ -148,6 +151,7 @@ Projects and areas are each sorted alphabetically by Name, matching `list`.
 
 - **Summary:** `tk review`'s `[k]eep` action stamps `last_reviewed`; `[a]rchive` and `[s]kip` don't
 - **Status:** Not started
+- **Depends on:** [review.md](review.md) Story 001, Story 002, Story 003 (the walk and its `[k]eep`/`[a]rchive`/`[s]kip` actions)
 
 ### Use Case
 

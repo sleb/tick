@@ -37,6 +37,7 @@ unlike sorting by Updated.
 ## User Story 001
 
 - **Summary:** Listing a category shows Name, Title, and Updated columns instead of bare paths
+- **Depends on:** [new.md](new.md) Story 003, Story 004, Story 005 (project/area/resource items to list), [review.md](review.md) Story 001 (shared raw-days age convention)
 
 ### Use Case
 
@@ -80,6 +81,7 @@ unlike sorting by Updated.
 ## User Story 002
 
 - **Summary:** Archived items show which category they came from, since names can collide across origins
+- **Depends on:** Story 001 (base column format)
 
 ### Use Case
 
@@ -104,6 +106,7 @@ unlike sorting by Updated.
 ## User Story 003
 
 - **Summary:** The optional filter matches a substring of either Name or Title, case-insensitively
+- **Depends on:** Story 001 (base column format)
 
 ### Use Case
 
@@ -138,6 +141,7 @@ unlike sorting by Updated.
 ## User Story 004
 
 - **Summary:** Listing an empty category prints a friendly message instead of nothing
+- **Depends on:** Story 001 (base column format), Story 003 (empty-result message for a filter, extended here to no filter)
 
 ### Use Case
 
@@ -157,6 +161,7 @@ unlike sorting by Updated.
 ## User Story 005
 
 - **Summary:** Title falls back to the item's Name when no heading can be inferred
+- **Depends on:** Story 001 (base column format)
 
 ### Use Case
 

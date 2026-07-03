@@ -8,6 +8,7 @@ these stories resolve.
 ## User Story 001
 
 - **Summary:** Running `tk daily` for the first time today creates the note
+- **Depends on:** [new.md](new.md) Story 002 (named, non-interactive note creation), Story 007 (template rendering)
 
 ### Use Case
 
@@ -30,6 +31,7 @@ these stories resolve.
 ## User Story 002
 
 - **Summary:** Running `tk daily` again the same day opens the existing note instead of recreating it
+- **Depends on:** Story 001 (note must already exist to be reopened)
 
 ### Use Case
 
@@ -59,6 +61,7 @@ these stories resolve.
 ## User Story 003
 
 - **Summary:** The daily note's filename always comes from the current date, never user input
+- **Depends on:** Story 001, Story 002 (creation and reopening both rely on this naming rule)
 
 ### Use Case
 

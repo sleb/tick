@@ -3,6 +3,7 @@
 ## User Story 001
 
 - **Summary:** See the config Tick is actually using, defaults and all
+- **Depends on:** Story 002 (config layering/resolution this command displays)
 
 ### Use Case
 
@@ -38,6 +39,7 @@
 ## User Story 002
 
 - **Summary:** Set personal defaults once, then override them per PARA system
+- **Depends on:** None
 
 ### Use Case
 
@@ -72,6 +74,7 @@
 ## User Story 003
 
 - **Summary:** Get a starting `.tick.toml` instead of writing one from scratch
+- **Depends on:** Story 002 (built-in default values this scaffolds)
 
 ### Use Case
 
@@ -98,6 +101,7 @@
 ## User Story 004
 
 - **Summary:** Don't clobber my customized config by re-running init
+- **Depends on:** Story 003 (the `init` command this guards)
 
 ### Use Case
 
@@ -129,6 +133,7 @@
 ## User Story 005
 
 - **Summary:** Jump straight into editing my config, no need to remember the filename
+- **Depends on:** Story 003 (creates defaults when no config exists yet, reused here)
 
 ### Use Case
 
@@ -163,6 +168,7 @@
 ## User Story 006
 
 - **Summary:** Get autocomplete and validation for `.tick.toml` in my editor
+- **Depends on:** Story 003 (`config init` this schema comment is written by), Story 005 (`config edit`'s no-config-yet path)
 
 ### Use Case
 

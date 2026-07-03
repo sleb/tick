@@ -7,6 +7,7 @@
   pre-populated with the rendered `note` template instead of a blank
   scratch file, per story 007). The current implementation still does
   simple first-line inference against a blank file; see roadmap.md item 2.
+- **Depends on:** [init.md](init.md) Story 001, Story 007 (editor pre-population this story's rework relies on)
 
 ### Use Case
 
@@ -61,6 +62,7 @@
 
 - **Summary:** Drop a named note straight into the Inbox
 - **Status:** Completed
+- **Depends on:** [init.md](init.md) Story 001
 
 ### Use Case
 
@@ -80,6 +82,7 @@
 ## User Story 003
 
 - **Summary:** Scaffold a new project as soon as it starts
+- **Depends on:** [init.md](init.md) Story 001, Story 002 (named-note creation)
 
 ### Use Case
 
@@ -99,6 +102,7 @@
 ## User Story 004
 
 - **Summary:** Scaffold a new area to track an ongoing responsibility
+- **Depends on:** [init.md](init.md) Story 001, Story 002 (named-note creation)
 
 ### Use Case
 
@@ -118,6 +122,7 @@
 ## User Story 005
 
 - **Summary:** File a reference note without the overhead of a directory
+- **Depends on:** [init.md](init.md) Story 001, Story 002 (named-note creation)
 
 ### Use Case
 
@@ -137,6 +142,7 @@
 ## User Story 006
 
 - **Summary:** Never have to type the file extension
+- **Depends on:** Story 002, Story 003, Story 004, Story 005 (extension inference applies to every creation variant)
 
 ### Use Case
 
@@ -156,6 +162,7 @@
 ## User Story 007
 
 - **Summary:** The editor opens pre-populated with the rendered template, not a blank file
+- **Depends on:** [init.md](init.md) Story 001
 
 ### Use Case
 
@@ -189,6 +196,7 @@
 ## User Story 008
 
 - **Summary:** Named notes render the configured template
+- **Depends on:** Story 002 (named Inbox note), Story 005 (named resource note), Story 007 (template rendering)
 
 ### Use Case
 
@@ -213,6 +221,7 @@
 ## User Story 009
 
 - **Summary:** Scaffolded project and area directories render the configured template into `index.md`
+- **Depends on:** Story 003 (project scaffold), Story 004 (area scaffold), Story 007 (template rendering)
 
 ### Use Case
 
@@ -237,6 +246,7 @@
 ## User Story 010
 
 - **Summary:** Capture a thought straight into a project, area, or resource
+- **Depends on:** Story 001 (timestamp-fallback capture flow), Story 003, Story 004, Story 005 (project/area/resource scaffolding), Story 007 (editor pre-population)
 
 ### Use Case
 
@@ -285,6 +295,7 @@
 ## User Story 011
 
 - **Summary:** Templates can stamp the current time, not just the date
+- **Depends on:** Story 007, Story 008 (template rendering, both non-interactive and editor pre-population)
 
 ### Use Case
 
@@ -310,6 +321,7 @@
 ## User Story 012
 
 - **Summary:** Templates can generate a unique id for Zettelkasten-style notes
+- **Depends on:** Story 007, Story 008 (template rendering, both non-interactive and editor pre-population)
 
 ### Use Case
 
@@ -340,6 +352,7 @@
 ## User Story 013
 
 - **Summary:** `--daily` scaffolds (or reopens) today's note without leaving `new`
+- **Depends on:** [daily.md](daily.md) Story 001, Story 002 (behavior this flag delegates to), Story 003, Story 004, Story 005 (mutual exclusivity with the other category flags)
 
 ### Use Case
 

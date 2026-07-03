@@ -13,6 +13,7 @@ order, the per-item prompt, and what `[a]rchive` does to the filesystem.
 
 - **Summary:** `review` walks every project, then every area, each sorted alphabetically by name
 - **Status:** Not started
+- **Depends on:** [new.md](new.md) Story 003, Story 004 (projects/areas to walk)
 
 ### Use Case
 
@@ -62,6 +63,7 @@ order, the per-item prompt, and what `[a]rchive` does to the filesystem.
 
 - **Summary:** `[a]rchive` moves the item the same way `tk mv <item> archive` would, and review moves on to the next item
 - **Status:** Not started
+- **Depends on:** Story 001 (the walk this action operates within)
 
 ### Use Case
 
@@ -94,6 +96,7 @@ order, the per-item prompt, and what `[a]rchive` does to the filesystem.
 
 - **Summary:** `[k]eep` and `[s]kip` leave the item in place and advance the walk
 - **Status:** Not started
+- **Depends on:** Story 001 (the walk this action operates within)
 
 ### Use Case
 

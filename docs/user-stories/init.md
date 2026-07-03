@@ -4,6 +4,7 @@
 
 - **Summary:** Turn the current directory into a PARA system with one command
 - **Status:** Completed
+- **Depends on:** None
 
 ### Use Case
 
@@ -25,6 +26,7 @@
 
 - **Summary:** Start a new, separately-named PARA system without leaving my current folder
 - **Status:** Completed
+- **Depends on:** Story 001 (same scaffolding behavior, applied to a named subdirectory)
 
 ### Use Case
 
@@ -46,6 +48,7 @@
 
 - **Summary:** Re-running `init` fills in whatever's missing instead of failing outright
 - **Status:** Completed
+- **Depends on:** Story 001, Story 002 (fills in gaps for either the current-directory or named-subdirectory target)
 
 ### Use Case
 
@@ -73,6 +76,7 @@
 
 - **Summary:** Get a clear error instead of a confusing filesystem failure when the target path is unusable
 - **Status:** Completed
+- **Depends on:** Story 002 (named target), Story 003 (partial-directory handling that this story's error path is an exception to)
 
 ### Use Case
 
