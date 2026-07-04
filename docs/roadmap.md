@@ -5,13 +5,13 @@
 | Command       | State                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `init`        | Done                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `new`         | Partial — Inbox capture (story 001/002/007) works, including `note`-template pre-population and frontmatter/heading-aware filename inference; `--project`/`--area`/`--resource` now scaffold named notes (story 003–006); only the `note` template exists (no layering, no `{{time}}`/`{{uuid}}`, no per-category templates — story 008–012), and `--project`/`--area`/`--resource` with no filename (story 010) isn't wired yet |
+| `new`         | Done — all of user-stories/new.md 001–013 completed, including per-category templates (`daily`/`project`/`area`/`resource`), `{{time}}`/`{{uuid}}` placeholders, and editor-capture with no filename into `--project`/`--area`/`--resource` (story 010)                                                                                                                                                                          |
 | `daily`       | Done                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `mv`          | Not started                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `list`        | Not started                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `status`      | Not started                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `review`      | Not started (module stub only in `docs/design.md`)                                                                                                                                                                                                                                                                                                                                                                               |
-| `config`      | Not started — `Config::load` reads one TOML file with no layering; no `templates` table; no `config` subcommand                                                                                                                                                                                                                                                                                                                  |
+| `config`      | Partial — `templates` table now covers all five categories, but `Config::load` still reads a single TOML file with no `built-in → ~/.tick.toml → ./.tick.toml` merge, and there's no `config` subcommand                                                                                                                                                                                                                        |
 | `completions` | Not started                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## Dependency graph
@@ -22,12 +22,12 @@ naming convention; see the footnote after the diagram for two cross-references
 that are docs-only and deliberately _not_ drawn here).
 
 ```
-                          init (done)
+                    init (done)
                               |
         +-----------------------+-----------------------+
         |                                                |
         v                                                v
- 1.    new                                        9. completions
+ 1.  new (done)                                   9. completions
         |                                         (no other deps)
      +--+------------+------------+
      |               |            |
@@ -68,6 +68,25 @@ no filename is story 010, not yet wired).
 - Covers user-stories/new.md 003–006. (Story 002, the named-Inbox-note case,
   is already Completed; init.md 001–004 are Done.)
 
+### 1b. `new`: templates, placeholders, and no-filename category capture
+
+Builds on item 1's flag-wiring above. `Config::templates` grew `daily`/
+`project`/`area`/`resource` fields alongside `note` (all rendered through
+the same pure `config::render`), plus `{{time}}` and `{{uuid}}`
+placeholders next to `{{title}}`/`{{date}}`. The editor-capture path (`new`
+with no filename) now pre-populates `$EDITOR` with the rendered template
+for whichever `Kind` was requested — including `--project`/`--area`/
+`--resource` with no filename (story 010), which scaffolds directly into
+that category's directory-vs-flat-file shape instead of always landing in
+`Inbox`. `run_new` takes a `Kind` (not just a `Category`) so it can look up
+the right template and still derive the filing category via
+`Kind::category`. `editor::suggest_filename`'s title-inference skips a
+leading frontmatter block, then takes the first Markdown heading line
+(any `#` level), falling back to the first non-blank post-frontmatter
+line, then to the timestamp fallback.
+
+- Covers user-stories/new.md 001–013, all completed.
+
 ### 3. `tk daily`
 
 Implemented as sugar for `tk new --daily`, per
@@ -88,56 +107,20 @@ on any later run.
 
 ## Next
 
-### 2. Config layering + templates
+### 2. Config layering
 
-Today `Config::load` reads a single path with no merge step, and
-`templates` only has a `note` field — `daily`/`project`/`area`/`resource`
-still have no template, so `--project`/`--area`/`--resource` and `daily`
-write raw editor content or an empty string instead of a rendered template.
-This is the one piece of plumbing that several later commands need, so it
-goes first in this group:
+`templates` now has all five fields (`note`/`daily`/`project`/`area`/
+`resource`) rendered through `config::render`, so the template side of
+this item is done — see item 1b above. What's left is the layering
+mechanism itself: `Config::load` still reads a single path with no merge
+step (`Workspace::discover` only knows about bare category dirs, not
+config layering at all).
 
-- ~~Add `templates: Templates` to `Config`, with `{{title}}`/`{{date}}`
-  rendering.~~ Done for `note` (see below); still need `daily`/`project`/
-  `area`/`resource` templates.
-- Implement the `built-in → ~/.tick.toml → ./.tick.toml` merge (currently
-  `Workspace::discover` only knows about bare category dirs, not config
-  layering at all).
-- **Why here:** `daily` (item 3) needs a rendered `daily` template, and
-  `config` (item 8) needs the same layering logic to report provenance.
-  Doing it once now avoids reworking `new`'s content path twice.
+- Implement the `built-in → ~/.tick.toml → ./.tick.toml` merge.
+- **Why here:** `config` (item 8) needs the same layering logic to report
+  provenance.
 - Covers the config-resolution scenarios in user-stories/config.md 001–002
   (not yet the `tk config` CLI surface — that's item 8).
-- **Design update (2026-07-02):** templates gained `{{time}}`, `{{cursor}}`,
-  and `{{uuid}}` placeholders alongside `{{title}}`/`{{date}}`, and the
-  editor-capture path (`new` with no filename, and `--project`/`--area`/
-  `--resource` with no filename) now pre-populates `$EDITOR` with the
-  rendered template instead of a blank scratch file — `{{title}}` renders
-  empty and `{{cursor}}` marks where the editor's cursor should start (via
-  a `+<line>` argument). This means `editor::suggest_filename`'s
-  title-inference can no longer assume the title is the file's literal
-  first line: it now skips a leading frontmatter block, then takes the
-  first Markdown heading line (any `#` level), falling back to the first
-  non-blank post-frontmatter line, then to the timestamp fallback.
-  **Implemented for the `note` template/story 001**: `Config::templates`
-  gained a `note: String` field plus a pure `config::render` for
-  `{{date}}`/`{{title}}`; `Editor::capture` now takes the rendered `seed`
-  and locates/strips `{{cursor}}` itself (`editor::locate_cursor`);
-  `editor::suggest_filename` was reworked to the frontmatter-skip +
-  heading-search + fallback-line + timestamp algorithm described above.
-  Still open: `{{time}}`/`{{uuid}}` placeholders, templates for
-  `daily`/`project`/`area`/`resource`, and the `~/.tick.toml`/`./.tick.toml`
-  merge — see user-stories/new.md 007/010 (partially satisfied by the
-  `note`-only implementation, but not yet exercised for `--project`/
-  `--area`/`--resource`), 008, 009, 011, 012.
-- Covers user-stories/new.md 001 (Completed), 007 (editor pre-population
-  and timestamp-fallback inference — implemented for the `note` template;
-  not yet re-verified against `--project`/`--area`/`--resource`), 008, 009
-  (template rendering for named notes and scaffolded `index.md` — still
-  needs `project`/`area`/`resource` templates), 010 (capture into
-  `--project`/`--area`/`--resource` with no filename — needs item 1's flags
-  plus this item's remaining templates), and 011, 012 (`{{time}}` and
-  `{{uuid}}` placeholders).
 
 ### 4. `tk list`
 
