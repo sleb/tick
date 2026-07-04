@@ -65,7 +65,13 @@ pub fn run_new(
     filename: Option<String>,
 ) -> anyhow::Result<PathBuf> {
     let path = match filename {
-        Some(name) => items::create(ws, category, &name, "")?,
+        Some(name) => {
+            let today = Local::now().date_naive().format("%Y-%m-%d").to_string();
+            let rendered =
+                config::render(ws.config.templates.for_category(category), &name, &today)
+                    .replace("{{cursor}}", "");
+            items::create(ws, category, &name, &rendered)?
+        }
         None => {
             let today = Local::now().date_naive().format("%Y-%m-%d").to_string();
             let seed = config::render(&ws.config.templates.note, "", &today);
@@ -251,6 +257,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(path, dir.path().join("0-Inbox/my-file.md"));
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# my-file"));
     }
 
     #[test]
@@ -275,6 +283,8 @@ mod tests {
             path,
             dir.path().join("1-Projects/website-redesign/index.md")
         );
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# website-redesign"));
     }
 
     #[test]
@@ -296,6 +306,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(path, dir.path().join("2-Areas/health/index.md"));
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# health"));
     }
 
     #[test]
@@ -317,6 +329,31 @@ mod tests {
         .unwrap();
 
         assert_eq!(path, dir.path().join("3-Resources/recipe-ideas.md"));
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# recipe-ideas"));
+    }
+
+    #[test]
+    fn named_note_renders_date_in_frontmatter() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let editor = PanicEditor;
+        let mut ui = FakeUi {
+            confirm_response: String::new(),
+        };
+
+        let path = run_new(
+            &ws,
+            &editor,
+            &mut ui,
+            Category::Inbox,
+            Some("my-file".to_string()),
+        )
+        .unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+        let today = Local::now().date_naive().format("%Y-%m-%d").to_string();
+        assert!(content.contains(&format!("last_updated: {today}")));
     }
 
     #[test]

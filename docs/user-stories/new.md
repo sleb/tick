@@ -1,223 +1,5 @@
 # User Stories: `tk new`
 
-## User Story 001
-
-- **Summary:** Capture a quick thought without leaving the terminal or naming a file
-- **Status:** Completed
-- **Depends on:** [init.md](init.md) Story 001, Story 007 (editor pre-population this story's rework relies on)
-
-### Use Case
-
-- **As a** Tick user with a fleeting idea
-- **I want to** run `tk new` with no arguments and write directly in my editor
-- **so that** I can capture the thought immediately without deciding on a filename or category first
-
-### Acceptance Criteria
-
-- **Scenario:** Accept the inferred filename
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **and Given:** my `$EDITOR` environment variable is set
-- **When:** I run `tk new` with no arguments, and my editor opens pre-populated with the rendered `note` template, cursor positioned at the `{{cursor}}` mark on the title line
-- **and When:** I type `Website Improvement Ideas` at the cursor (so the title line reads `# Website Improvement Ideas`), save, and exit the editor
-- **Then:** Tick prompts `Create "website-improvement-ideas.md"?` with the inferred name pre-filled
-- **and Then:** if I accept the prompt, the file is created in `0-Inbox` under that name, containing the frontmatter and heading exactly as I left them, and Tick prints the path it created
-
-- **Scenario:** Override the inferred filename
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **and Given:** my `$EDITOR` environment variable is set
-- **When:** I run `tk new` with no arguments, fill in the pre-populated template, save, exit the editor, and am shown the inferred filename prompt
-- **Then:** I can type a different filename instead of accepting the suggestion
-- **and Then:** the file is created in `0-Inbox` under the name I typed, and Tick prints the path it created
-
-- **Scenario:** Heading found further down the note is still used
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **and Given:** my `$EDITOR` environment variable is set
-- **When:** I run `tk new`, leave the pre-populated title line blank, write some body text, then add a heading line (e.g. `# Actual Title`) further down, save, and exit the editor
-- **Then:** Tick infers the title from that heading line, wherever it falls in the file — not just the line immediately after the frontmatter
-
-- **Scenario:** No heading present falls back to the first line of content
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **and Given:** my `$EDITOR` environment variable is set
-- **When:** I run `tk new`, delete the template's heading line entirely, write plain body text with no `#` heading anywhere, save, and exit the editor
-- **Then:** Tick infers the title verbatim from the first non-blank line after the frontmatter block, since no heading line was found
-
-- **Scenario:** Leaving the template unmodified falls back to a timestamp
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **and Given:** my `$EDITOR` environment variable is set
-- **When:** I run `tk new`, save the file exactly as it was pre-populated (no title typed in, no other edits), and exit the editor
-- **Then:** Tick prompts with a filename generated from the current timestamp instead of a note title, since the template alone has no title content to infer from
-
-- **Scenario:** Emptying the file falls back to a timestamp
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **and Given:** my `$EDITOR` environment variable is set
-- **When:** I run `tk new`, delete everything the editor was pre-populated with (including the frontmatter), save an empty file, and exit the editor
-- **Then:** Tick prompts with a filename generated from the current timestamp instead of a note title
-
----
-
-## User Story 002
-
-- **Summary:** Drop a named note straight into the Inbox
-- **Status:** Completed
-- **Depends on:** [init.md](init.md) Story 001
-
-### Use Case
-
-- **As a** Tick user who already knows what to call a note
-- **I want to** run `tk new <filename>` and skip the editor prompt
-- **so that** I can create the file directly without an extra confirmation step
-
-### Acceptance Criteria
-
-- **Scenario:** Create a named file in the Inbox
-- **Given:** I am inside an initialized PARA system
-- **When:** I run `tk new my-file`
-- **Then:** a file named `my-file.md` is created in `0-Inbox` and Tick prints the path it created
-
----
-
-## User Story 003
-
-- **Summary:** Scaffold a new project as soon as it starts
-- **Status:** Completed
-- **Depends on:** [init.md](init.md) Story 001, Story 002 (named-note creation)
-
-### Use Case
-
-- **As a** Tick user starting a new short-term effort
-- **I want to** run `tk new --project <filename>`
-- **so that** I get a directory ready to hold drafts and attachments, not just a single file
-
-### Acceptance Criteria
-
-- **Scenario:** Create a new project directory
-- **Given:** I am inside an initialized PARA system
-- **When:** I run `tk new --project website-redesign`
-- **Then:** a directory `1-Projects/website-redesign` is created containing an `index.md`, and Tick prints the path to that `index.md`
-
----
-
-## User Story 004
-
-- **Summary:** Scaffold a new area to track an ongoing responsibility
-- **Status:** Completed
-- **Depends on:** [init.md](init.md) Story 001, Story 002 (named-note creation)
-
-### Use Case
-
-- **As a** Tick user taking on an ongoing responsibility
-- **I want to** run `tk new --area <filename>`
-- **so that** I get a directory to hold everything related to maintaining that responsibility over time
-
-### Acceptance Criteria
-
-- **Scenario:** Create a new area directory
-- **Given:** I am inside an initialized PARA system
-- **When:** I run `tk new --area health`
-- **Then:** a directory `2-Areas/health` is created containing an `index.md`, and Tick prints the path to that `index.md`
-
----
-
-## User Story 005
-
-- **Summary:** File a reference note without the overhead of a directory
-- **Status:** Completed
-- **Depends on:** [init.md](init.md) Story 001, Story 002 (named-note creation)
-
-### Use Case
-
-- **As a** Tick user saving a topic of ongoing interest
-- **I want to** run `tk new --resource <filename>`
-- **so that** the note is filed as a single flat file, since it won't accumulate supporting material like a project or area would
-
-### Acceptance Criteria
-
-- **Scenario:** Create a new resource file
-- **Given:** I am inside an initialized PARA system
-- **When:** I run `tk new --resource recipe-ideas`
-- **Then:** a file named `recipe-ideas.md` is created in `3-Resources` and Tick prints the path it created
-
----
-
-## User Story 006
-
-- **Summary:** Never have to type the file extension
-- **Depends on:** Story 002, Story 003, Story 004, Story 005 (extension inference applies to every creation variant)
-
-### Use Case
-
-- **As a** Tick user creating notes throughout the day
-- **I want to** name files without specifying an extension
-- **so that** I don't have to remember or type `.md` every time
-
-### Acceptance Criteria
-
-- **Scenario:** Filename given without an extension
-- **Given:** I am inside an initialized PARA system
-- **When:** I run `tk new my-file` (or any `tk new` variant) with a filename that has no extension
-- **Then:** the created file has `.md` appended automatically
-
----
-
-## User Story 007
-
-- **Summary:** The editor opens pre-populated with the rendered template, not a blank file
-- **Depends on:** [init.md](init.md) Story 001
-
-### Use Case
-
-- **As a** Tick user capturing a quick thought in `$EDITOR`
-- **I want to** see the category's frontmatter and structure already filled in when the editor opens
-- **so that** I get the same consistent structure as every other note in that category, without having to retype boilerplate by hand every time I capture something
-
-### Acceptance Criteria
-
-- **Scenario:** Editor opens pre-populated with the rendered template
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **and Given:** my `$EDITOR` environment variable is set
-- **When:** I run `tk new` with no arguments
-- **Then:** `$EDITOR` opens on a scratch file already containing the `note` template rendered with `{{date}}` filled in as today's date and `{{title}}` left empty (the title isn't known yet)
-- **and Then:** the editor's cursor is positioned at the `{{cursor}}` mark — the title line — so I can start typing the title immediately
-
-- **Scenario:** My edits are layered onto the pre-populated template, not replacing it
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **and Given:** my `$EDITOR` environment variable is set
-- **When:** I run `tk new`, type a title at the cursor, add body text below the frontmatter, save, and exit the editor
-- **Then:** the created file contains the rendered frontmatter, my typed title, and my body text — nothing is stripped or re-rendered after I save
-
-- **Scenario:** Cursor positioning falls back gracefully for editors that don't support it
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **and Given:** my `$EDITOR` is set to an editor that doesn't understand the `+<line>` cursor-positioning argument
-- **When:** I run `tk new` with no arguments
-- **Then:** the editor still opens on the pre-populated scratch file, just without the cursor pre-positioned at the title line
-
----
-
-## User Story 008
-
-- **Summary:** Named notes render the configured template
-- **Depends on:** Story 002 (named Inbox note), Story 005 (named resource note), Story 007 (template rendering)
-
-### Use Case
-
-- **As a** Tick user creating a note by name instead of through the editor
-- **I want to** have the category's template applied to the new file
-- **so that** I get the same frontmatter and structure I'd get from any other note in that category, without retyping it
-
-### Acceptance Criteria
-
-- **Scenario:** Named Inbox note renders the `note` template
-- **Given:** I am inside an initialized PARA system with the default `note` template
-- **When:** I run `tk new my-file`
-- **Then:** `0-Inbox/my-file.md` is created with the `note` template rendered into it, `{{title}}` filled in with `my-file` and `{{date}}` filled in with today's date
-
-- **Scenario:** Named resource note renders the `resource` template
-- **Given:** I am inside an initialized PARA system with the default `resource` template
-- **When:** I run `tk new --resource recipe-ideas`
-- **Then:** `3-Resources/recipe-ideas.md` is created with the `resource` template rendered into it, `{{title}}` filled in with `recipe-ideas` and `{{date}}` filled in with today's date
-
----
-
 ## User Story 009
 
 - **Summary:** Scaffolded project and area directories render the configured template into `index.md`
@@ -376,3 +158,224 @@
 - **Given:** I am inside an initialized PARA system
 - **When:** I run `tk new --daily --project`
 - **Then:** Tick rejects the command with an error, since `--daily`, `--project`, `--area`, and `--resource` are mutually exclusive
+
+---
+
+## User Story 001 ✅
+
+- **Summary:** Capture a quick thought without leaving the terminal or naming a file
+- **Status:** Completed
+- **Depends on:** [init.md](init.md) Story 001, Story 007 (editor pre-population this story's rework relies on)
+
+### Use Case
+
+- **As a** Tick user with a fleeting idea
+- **I want to** run `tk new` with no arguments and write directly in my editor
+- **so that** I can capture the thought immediately without deciding on a filename or category first
+
+### Acceptance Criteria
+
+- **Scenario:** Accept the inferred filename
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **and Given:** my `$EDITOR` environment variable is set
+- **When:** I run `tk new` with no arguments, and my editor opens pre-populated with the rendered `note` template, cursor positioned at the `{{cursor}}` mark on the title line
+- **and When:** I type `Website Improvement Ideas` at the cursor (so the title line reads `# Website Improvement Ideas`), save, and exit the editor
+- **Then:** Tick prompts `Create "website-improvement-ideas.md"?` with the inferred name pre-filled
+- **and Then:** if I accept the prompt, the file is created in `0-Inbox` under that name, containing the frontmatter and heading exactly as I left them, and Tick prints the path it created
+
+- **Scenario:** Override the inferred filename
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **and Given:** my `$EDITOR` environment variable is set
+- **When:** I run `tk new` with no arguments, fill in the pre-populated template, save, exit the editor, and am shown the inferred filename prompt
+- **Then:** I can type a different filename instead of accepting the suggestion
+- **and Then:** the file is created in `0-Inbox` under the name I typed, and Tick prints the path it created
+
+- **Scenario:** Heading found further down the note is still used
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **and Given:** my `$EDITOR` environment variable is set
+- **When:** I run `tk new`, leave the pre-populated title line blank, write some body text, then add a heading line (e.g. `# Actual Title`) further down, save, and exit the editor
+- **Then:** Tick infers the title from that heading line, wherever it falls in the file — not just the line immediately after the frontmatter
+
+- **Scenario:** No heading present falls back to the first line of content
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **and Given:** my `$EDITOR` environment variable is set
+- **When:** I run `tk new`, delete the template's heading line entirely, write plain body text with no `#` heading anywhere, save, and exit the editor
+- **Then:** Tick infers the title verbatim from the first non-blank line after the frontmatter block, since no heading line was found
+
+- **Scenario:** Leaving the template unmodified falls back to a timestamp
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **and Given:** my `$EDITOR` environment variable is set
+- **When:** I run `tk new`, save the file exactly as it was pre-populated (no title typed in, no other edits), and exit the editor
+- **Then:** Tick prompts with a filename generated from the current timestamp instead of a note title, since the template alone has no title content to infer from
+
+- **Scenario:** Emptying the file falls back to a timestamp
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **and Given:** my `$EDITOR` environment variable is set
+- **When:** I run `tk new`, delete everything the editor was pre-populated with (including the frontmatter), save an empty file, and exit the editor
+- **Then:** Tick prompts with a filename generated from the current timestamp instead of a note title
+
+---
+
+## User Story 002 ✅
+
+- **Summary:** Drop a named note straight into the Inbox
+- **Status:** Completed
+- **Depends on:** [init.md](init.md) Story 001
+
+### Use Case
+
+- **As a** Tick user who already knows what to call a note
+- **I want to** run `tk new <filename>` and skip the editor prompt
+- **so that** I can create the file directly without an extra confirmation step
+
+### Acceptance Criteria
+
+- **Scenario:** Create a named file in the Inbox
+- **Given:** I am inside an initialized PARA system
+- **When:** I run `tk new my-file`
+- **Then:** a file named `my-file.md` is created in `0-Inbox` and Tick prints the path it created
+
+---
+
+## User Story 003 ✅
+
+- **Summary:** Scaffold a new project as soon as it starts
+- **Status:** Completed
+- **Depends on:** [init.md](init.md) Story 001, Story 002 (named-note creation)
+
+### Use Case
+
+- **As a** Tick user starting a new short-term effort
+- **I want to** run `tk new --project <filename>`
+- **so that** I get a directory ready to hold drafts and attachments, not just a single file
+
+### Acceptance Criteria
+
+- **Scenario:** Create a new project directory
+- **Given:** I am inside an initialized PARA system
+- **When:** I run `tk new --project website-redesign`
+- **Then:** a directory `1-Projects/website-redesign` is created containing an `index.md`, and Tick prints the path to that `index.md`
+
+---
+
+## User Story 004 ✅
+
+- **Summary:** Scaffold a new area to track an ongoing responsibility
+- **Status:** Completed
+- **Depends on:** [init.md](init.md) Story 001, Story 002 (named-note creation)
+
+### Use Case
+
+- **As a** Tick user taking on an ongoing responsibility
+- **I want to** run `tk new --area <filename>`
+- **so that** I get a directory to hold everything related to maintaining that responsibility over time
+
+### Acceptance Criteria
+
+- **Scenario:** Create a new area directory
+- **Given:** I am inside an initialized PARA system
+- **When:** I run `tk new --area health`
+- **Then:** a directory `2-Areas/health` is created containing an `index.md`, and Tick prints the path to that `index.md`
+
+---
+
+## User Story 005 ✅
+
+- **Summary:** File a reference note without the overhead of a directory
+- **Status:** Completed
+- **Depends on:** [init.md](init.md) Story 001, Story 002 (named-note creation)
+
+### Use Case
+
+- **As a** Tick user saving a topic of ongoing interest
+- **I want to** run `tk new --resource <filename>`
+- **so that** the note is filed as a single flat file, since it won't accumulate supporting material like a project or area would
+
+### Acceptance Criteria
+
+- **Scenario:** Create a new resource file
+- **Given:** I am inside an initialized PARA system
+- **When:** I run `tk new --resource recipe-ideas`
+- **Then:** a file named `recipe-ideas.md` is created in `3-Resources` and Tick prints the path it created
+
+---
+
+## User Story 006 ✅
+
+- **Summary:** Never have to type the file extension
+- **Status:** Completed
+- **Depends on:** Story 002, Story 003, Story 004, Story 005 (extension inference applies to every creation variant)
+
+### Use Case
+
+- **As a** Tick user creating notes throughout the day
+- **I want to** name files without specifying an extension
+- **so that** I don't have to remember or type `.md` every time
+
+### Acceptance Criteria
+
+- **Scenario:** Filename given without an extension
+- **Given:** I am inside an initialized PARA system
+- **When:** I run `tk new my-file` (or any `tk new` variant) with a filename that has no extension
+- **Then:** the created file has `.md` appended automatically
+
+---
+
+## User Story 007 ✅
+
+- **Summary:** The editor opens pre-populated with the rendered template, not a blank file
+- **Status:** Completed
+- **Depends on:** [init.md](init.md) Story 001
+
+### Use Case
+
+- **As a** Tick user capturing a quick thought in `$EDITOR`
+- **I want to** see the category's frontmatter and structure already filled in when the editor opens
+- **so that** I get the same consistent structure as every other note in that category, without having to retype boilerplate by hand every time I capture something
+
+### Acceptance Criteria
+
+- **Scenario:** Editor opens pre-populated with the rendered template
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **and Given:** my `$EDITOR` environment variable is set
+- **When:** I run `tk new` with no arguments
+- **Then:** `$EDITOR` opens on a scratch file already containing the `note` template rendered with `{{date}}` filled in as today's date and `{{title}}` left empty (the title isn't known yet)
+- **and Then:** the editor's cursor is positioned at the `{{cursor}}` mark — the title line — so I can start typing the title immediately
+
+- **Scenario:** My edits are layered onto the pre-populated template, not replacing it
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **and Given:** my `$EDITOR` environment variable is set
+- **When:** I run `tk new`, type a title at the cursor, add body text below the frontmatter, save, and exit the editor
+- **Then:** the created file contains the rendered frontmatter, my typed title, and my body text — nothing is stripped or re-rendered after I save
+
+- **Scenario:** Cursor positioning falls back gracefully for editors that don't support it
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **and Given:** my `$EDITOR` is set to an editor that doesn't understand the `+<line>` cursor-positioning argument
+- **When:** I run `tk new` with no arguments
+- **Then:** the editor still opens on the pre-populated scratch file, just without the cursor pre-positioned at the title line
+
+---
+
+## User Story 008 ✅
+
+- **Summary:** Named notes render the configured template
+- **Status:** Completed
+- **Depends on:** Story 002 (named Inbox note), Story 005 (named resource note), Story 007 (template rendering)
+
+### Use Case
+
+- **As a** Tick user creating a note by name instead of through the editor
+- **I want to** have the category's template applied to the new file
+- **so that** I get the same frontmatter and structure I'd get from any other note in that category, without retyping it
+
+### Acceptance Criteria
+
+- **Scenario:** Named Inbox note renders the `note` template
+- **Given:** I am inside an initialized PARA system with the default `note` template
+- **When:** I run `tk new my-file`
+- **Then:** `0-Inbox/my-file.md` is created with the `note` template rendered into it, `{{title}}` filled in with `my-file` and `{{date}}` filled in with today's date
+
+- **Scenario:** Named resource note renders the `resource` template
+- **Given:** I am inside an initialized PARA system with the default `resource` template
+- **When:** I run `tk new --resource recipe-ideas`
+- **Then:** `3-Resources/recipe-ideas.md` is created with the `resource` template rendered into it, `{{title}}` filled in with `recipe-ideas` and `{{date}}` filled in with today's date

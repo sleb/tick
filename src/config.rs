@@ -32,12 +32,38 @@ impl Default for Config {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Templates {
     pub note: String,
+    pub project: String,
+    pub area: String,
+    pub resource: String,
 }
 
 impl Default for Templates {
     fn default() -> Self {
         Self {
             note: "---\nlast_updated: {{date}}\n---\n# {{cursor}}{{title}}\n".to_string(),
+            project:
+                "---\nlast_updated: {{date}}\n---\n\n# {{cursor}}{{title}}\n\nStatus: active\n"
+                    .to_string(),
+            area: "---\nlast_updated: {{date}}\n---\n\n# {{cursor}}{{title}}\n\nStandard:\n"
+                .to_string(),
+            resource: "---\nlast_updated: {{date}}\n---\n\n# {{cursor}}{{title}}\n".to_string(),
+        }
+    }
+}
+
+impl Templates {
+    /// Maps a category to the template used when creating one of its
+    /// items. Panics on `Category::Archive` — `items::create` (the only
+    /// caller that renders a template) is never called with that variant,
+    /// since items only arrive in `Archive` via `items::mv`.
+    pub fn for_category(&self, category: crate::category::Category) -> &str {
+        use crate::category::Category;
+        match category {
+            Category::Inbox => &self.note,
+            Category::Project => &self.project,
+            Category::Area => &self.area,
+            Category::Resource => &self.resource,
+            Category::Archive => panic!("Archive has no template; items arrive there via mv"),
         }
     }
 }
@@ -169,6 +195,29 @@ mod tests {
             rendered,
             "---\nlast_updated: 2026-07-03\n---\n# {{cursor}}\n"
         );
+    }
+
+    #[test]
+    fn for_category_maps_to_matching_template() {
+        use crate::category::Category;
+
+        let templates = Templates::default();
+
+        assert_eq!(templates.for_category(Category::Inbox), templates.note);
+        assert_eq!(templates.for_category(Category::Project), templates.project);
+        assert_eq!(templates.for_category(Category::Area), templates.area);
+        assert_eq!(
+            templates.for_category(Category::Resource),
+            templates.resource
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn for_category_panics_on_archive() {
+        use crate::category::Category;
+
+        Templates::default().for_category(Category::Archive);
     }
 
     #[test]

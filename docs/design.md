@@ -51,9 +51,14 @@ Parses `.tick.toml`. Pure data, one file read.
   discriminants and this array's order must stay in sync (enforced by
   `Workspace::category_dir` using the cast directly, rather than a
   hand-written match).
-- `struct Templates { note: String }` — one field per category template;
-  currently only `note` exists (see roadmap item 2 for `daily`/`project`/
-  `area`/`resource`, not yet added).
+- `struct Templates { note: String, project: String, area: String, resource: String, daily: String }`
+  — one field per category template, plus `daily` (not category-indexed,
+  since `Category` has no `Daily` variant — `tk daily`/`tk new --daily`
+  render it directly rather than going through `Templates::for_category`).
+- `Templates::for_category(&self, category: Category) -> &str` — maps
+  `Inbox`/`Project`/`Area`/`Resource` to `note`/`project`/`area`/`resource`
+  respectively; panics on `Archive`, since `items::create` is never called
+  with `Category::Archive` (items only arrive there via `items::mv`).
 - `Config::default() -> Config` — `0-Inbox`, `1-Projects`, `2-Areas`,
   `3-Resources`, `4-Archive`, `md`, and the default `note` template.
 - `Config::load(path: &Path) -> Result<Config>` — reads `.tick.toml` if present,
@@ -94,9 +99,13 @@ structured results — no printing, no prompting.
 
 - `create(ws: &Workspace, category: Category, name: &str, content: &str) -> Result<PathBuf>`
   — creates a flat file or a scaffolded `dir/index.md`, appending the default
-  extension if the name has none, and writing `content` into it (`""` for
-  callers with nothing to seed, e.g. named-file creation). Returns the path
-  created (the `index.md` path for directory-style categories).
+  extension if the name has none, and writing `content` into it. Returns the
+  path created (the `index.md` path for directory-style categories).
+  `content` is caller-rendered: `cli::run_new`'s named-file path renders
+  `ws.config.templates.for_category(category)` with `{{title}}` set to `name`
+  before calling `create`, so every creation path (interactive editor capture
+  and non-interactive named creation alike) writes the category's template
+  rather than a raw string.
 - `mv(ws: &Workspace, item: &Path, target: Category) -> Result<PathBuf>` —
   moves a file or project/area directory; wraps a flat file into a new
   directory when moving into `Project`/`Area`; when moving to `Archive`,
@@ -185,16 +194,17 @@ The only component that touches argv, stdin, and stdout. A `clap`-derived
   `confirm(prompt: &str, default: &str) -> Result<String>`,
   `choose(prompt: &str, options: &[&str]) -> Result<char>`.
 - `run_new(ws: &Workspace, editor: &dyn Editor, ui: &mut dyn Ui, category: Category, filename: Option<&str>) -> Result<PathBuf>`
-  — when `filename` is given, calls `items::create(ws, category, filename, "")`
-  directly, non-interactively; `category` is what makes `--project`/`--area`/
-  `--resource` scaffold into the right place instead of always `Inbox`. When
-  `filename` is `None`, seeds `$EDITOR` with the rendered `note` template and
-  prompts for the inferred name exactly as today, always into `Inbox` —
+  — when `filename` is given, renders `ws.config.templates.for_category(category)`
+  with `{{title}}` set to `filename` and `{{date}}` set to today, then calls
+  `items::create(ws, category, filename, &rendered)` directly, non-interactively;
+  `category` is what makes `--project`/`--area`/`--resource` scaffold into the
+  right place (and render the right template) instead of always `Inbox`/`note`.
+  When `filename` is `None`, seeds `$EDITOR` with the rendered `note` template
+  and prompts for the inferred name exactly as today, always into `Inbox` —
   capturing directly into a project/area/resource with no filename is Story
-  010, not yet implemented, and per-category seed templates are Story
-  007/009. `main` maps `--project`/`--area`/`--resource` (mutually exclusive,
-  via a `clap` `ArgGroup`) to `Category`, defaulting to `Inbox` when none are
-  given.
+  010, not yet implemented. `main` maps `--project`/`--area`/`--resource`
+  (mutually exclusive, via a `clap` `ArgGroup`) to `Category`, defaulting to
+  `Inbox` when none are given.
 - `run_init(cwd: &Path, name: Option<&str>) -> Result<String>` — resolves
   the target (`cwd` or `cwd.join(name)`) and its display form (`.` or
   `./<name>`), calls `workspace::init` (which runs `check_collision`
