@@ -310,15 +310,25 @@ impl Config {
     }
 }
 
+/// Embedded at compile time; single source of truth for the schema's
+/// contents, checked into the repo at assets/tick.schema.json.
+const SCHEMA_JSON: &str = include_str!("../assets/tick.schema.json");
+
+/// The exact filename `#:schema` points at and that `init` writes,
+/// documented in README.md's "Schema and autocomplete" section.
+const SCHEMA_FILENAME: &str = ".tick.schema.json";
+
 /// Renders `Config::default()` as the exact `.tick.toml` shape documented in
-/// README.md's Configuration section — nested `[folders]`/`[defaults]`/
-/// `[templates]` tables, no `#:schema` line (that's config.md 006, not this
-/// story).
+/// README.md's Configuration section — a leading `#:schema` directive
+/// (config.md 006) followed by nested `[folders]`/`[defaults]`/
+/// `[templates]` tables.
 pub fn default_toml() -> String {
     let defaults = Config::default();
     let templates = &defaults.templates;
     format!(
-        r#"[folders]
+        r#"#:schema ./.tick.schema.json
+
+[folders]
 inbox = "{}"
 projects = "{}"
 areas = "{}"
@@ -358,15 +368,31 @@ resource = """
     )
 }
 
-/// Writes `default_toml()` to `path`. Errors with `AlreadyExists` (and
-/// leaves `path` untouched) if a file is already there, rather than
-/// overwriting a user's customizations.
+/// Writes `default_toml()` to `path`, alongside a sibling
+/// `.tick.schema.json` that the `#:schema` directive in `default_toml()`
+/// refers to. Errors with `AlreadyExists` (and leaves `path` untouched) if
+/// a file is already there, rather than overwriting a user's
+/// customizations.
+///
+/// The schema file is written first: if that write fails, `init` has
+/// created nothing the caller needs to clean up, and a retry hits the same
+/// state. Writing `.tick.toml` first would risk leaving behind a config
+/// referencing a schema that was never written, with no way to retry the
+/// schema write alone (the second call would fail `AlreadyExists` first).
 pub fn init(path: &Path) -> Result<(), ConfigError> {
     if path.exists() {
         return Err(ConfigError::AlreadyExists {
             path: path.display().to_string(),
         });
     }
+    let schema_path = path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(SCHEMA_FILENAME);
+    fs::write(&schema_path, SCHEMA_JSON).map_err(|source| ConfigError::Write {
+        path: schema_path.display().to_string(),
+        source,
+    })?;
     fs::write(path, default_toml()).map_err(|source| ConfigError::Write {
         path: path.display().to_string(),
         source,
@@ -690,8 +716,17 @@ mod tests {
     }
 
     #[test]
-    fn default_toml_has_no_schema_line() {
-        assert!(!default_toml().starts_with("#:schema"));
+    fn default_toml_starts_with_schema_directive() {
+        assert!(default_toml().starts_with("#:schema ./.tick.schema.json\n"));
+    }
+
+    #[test]
+    fn schema_json_is_valid_json_with_expected_top_level_keys() {
+        let parsed: serde_json::Value = serde_json::from_str(SCHEMA_JSON).unwrap();
+        let properties = parsed.get("properties").unwrap();
+        assert!(properties.get("folders").is_some());
+        assert!(properties.get("defaults").is_some());
+        assert!(properties.get("templates").is_some());
     }
 
     #[test]
@@ -724,6 +759,18 @@ mod tests {
     }
 
     #[test]
+    fn init_writes_schema_file_alongside_config() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join(".tick.toml");
+
+        init(&path).unwrap();
+
+        let schema_path = dir.path().join(".tick.schema.json");
+        assert!(schema_path.exists());
+        assert_eq!(fs::read_to_string(&schema_path).unwrap(), SCHEMA_JSON);
+    }
+
+    #[test]
     fn init_refuses_when_file_already_exists() {
         let dir = tempdir().unwrap();
         let path = dir.path().join(".tick.toml");
@@ -733,5 +780,6 @@ mod tests {
 
         assert!(matches!(err, ConfigError::AlreadyExists { .. }));
         assert_eq!(fs::read_to_string(&path).unwrap(), "custom content");
+        assert!(!dir.path().join(".tick.schema.json").exists());
     }
 }

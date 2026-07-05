@@ -133,15 +133,26 @@ Parses `.tick.toml` and layers it across three sources — built-in defaults,
   `Config::load`.
 - `ConfigError` also has `AlreadyExists { path }` and `Write { path, source }`
   variants, for the writer below.
+- `SCHEMA_JSON: &str` — the JSON Schema (draft 2020-12) for `.tick.toml`,
+  embedded at compile time via `include_str!` from
+  `assets/tick.schema.json` (hand-maintained, checked into the repo).
+- `SCHEMA_FILENAME: &str = ".tick.schema.json"` — the sibling filename the
+  `#:schema` directive points at and that `init` writes.
 - `default_toml() -> String` — renders `Config::default()` as the exact
-  `.tick.toml` shape documented in README.md's Configuration section
-  (nested `[folders]`/`[defaults]`/`[templates]` tables, templates as
-  triple-quoted strings). Pure — no filesystem access. No `#:schema` line
-  (config.md 006, not yet implemented).
-- `init(path: &Path) -> Result<()>` — writes `default_toml()` to `path`;
-  errors with `AlreadyExists` (leaving `path` untouched) if a file is
-  already there, rather than overwriting a user's customizations. Backs
-  `tk config init`/`tk config init -g` (see `cli::run_config_init` below).
+  `.tick.toml` shape documented in README.md's Configuration section: a
+  leading `#:schema ./.tick.schema.json` directive (config.md 006),
+  followed by nested `[folders]`/`[defaults]`/`[templates]` tables,
+  templates as triple-quoted strings. Pure — no filesystem access; the
+  directive just names the sibling file, `init` is responsible for
+  actually writing it.
+- `init(path: &Path) -> Result<()>` — writes `SCHEMA_JSON` to
+  `path.parent().join(SCHEMA_FILENAME)`, then `default_toml()` to `path`
+  (schema first, so a failed write leaves nothing for the caller to clean
+  up and a retry doesn't hit a stale `AlreadyExists`). Errors with
+  `AlreadyExists` (leaving `path` untouched, no schema file written either)
+  if `path` already exists, rather than overwriting a user's
+  customizations. Backs `tk config init`/`tk config init -g` (see
+  `cli::run_config_init` below).
 - `render(template: &str, title: &str, date: &str, time: &str, uuid: &str) -> String`
   — fills in `{{date}}`, `{{title}}`, `{{time}}`, and `{{uuid}}`, leaving
   `{{cursor}}` untouched (that marker is `Editor`'s job — see below). All
@@ -356,7 +367,7 @@ The only component that touches argv, stdin, and stdout. A `clap`-derived
   (`config_target`) `ConfigAction::Init`'s arm uses, then prints
   `Created {display}` only when created and `Opening $EDITOR...`
   unconditionally. See `docs/lld/007-config-edit.md`. Bare `tk config`
-  (provenance display) and the `#:schema` file are still open.
+  (provenance display) is still open.
 
 ## Notes
 

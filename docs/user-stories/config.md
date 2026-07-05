@@ -165,7 +165,7 @@
 
 ---
 
-## User Story 006
+## User Story 006 ✅
 
 - **Summary:** Get autocomplete and validation for `.tick.toml` in my editor
 - **Depends on:** Story 003 (`config init` this schema comment is written by), Story 005 (`config edit`'s no-config-yet path)

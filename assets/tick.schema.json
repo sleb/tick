@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tick config",
+  "description": "Schema for .tick.toml, tick's PARA-method config file.",
+  "type": "object",
+  "properties": {
+    "folders": {
+      "type": "object",
+      "description": "Directory names for each PARA category, relative to the workspace root.",
+      "properties": {
+        "inbox": { "type": "string" },
+        "projects": { "type": "string" },
+        "areas": { "type": "string" },
+        "resources": { "type": "string" },
+        "archive": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Default values used when creating new items.",
+      "properties": {
+        "extension": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "templates": {
+      "type": "object",
+      "description": "Templates used when creating new items, keyed by item kind.",
+      "properties": {
+        "note": { "type": "string" },
+        "daily": { "type": "string" },
+        "project": { "type": "string" },
+        "area": { "type": "string" },
+        "resource": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
