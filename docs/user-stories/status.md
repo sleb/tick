@@ -149,7 +149,7 @@ Projects and areas are each sorted alphabetically by Name, matching `list`.
 ## User Story 004
 
 - **Summary:** `tk review`'s `[k]eep` action stamps `last_reviewed`; `[a]rchive` and `[s]kip` don't
-- **Status:** Not started
+- **Status:** ✅
 - **Depends on:** [review.md](review.md) Story 001, Story 002, Story 003 (the walk and its `[k]eep`/`[a]rchive`/`[s]kip` actions)
 
 ### Use Case

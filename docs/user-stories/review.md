@@ -62,7 +62,7 @@ order, the per-item prompt, and what `[a]rchive` does to the filesystem.
 ## User Story 002
 
 - **Summary:** `[a]rchive` moves the item the same way `tk move <item> archive` would, and review moves on to the next item
-- **Status:** Not started
+- **Status:** ✅
 - **Depends on:** Story 001 (the walk this action operates within)
 
 ### Use Case
@@ -95,7 +95,7 @@ order, the per-item prompt, and what `[a]rchive` does to the filesystem.
 ## User Story 003
 
 - **Summary:** `[k]eep` and `[s]kip` leave the item in place and advance the walk
-- **Status:** Not started
+- **Status:** ✅
 - **Depends on:** Story 001 (the walk this action operates within)
 
 ### Use Case

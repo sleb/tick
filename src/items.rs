@@ -369,6 +369,69 @@ pub fn read_last_reviewed(item: &std::path::Path) -> Result<Option<u64>, ItemsEr
     ))
 }
 
+/// Sets `index.md`'s `last_reviewed` frontmatter field to today's date,
+/// adding the field if absent and preserving every other frontmatter key
+/// and the body unchanged (status.md 004, scenarios 1-2). Byte-splices
+/// rather than re-serializing the whole file, so untouched keys/formatting
+/// (quoting, key order, comments `gist` doesn't model) survive exactly:
+///
+/// - Field present with a scalar value: replaces just
+///   `FrontmatterField::value_range`'s bytes with today's date.
+/// - Field absent, frontmatter block present: inserts a new
+///   `last_reviewed: <date>` line immediately before the closing `---`,
+///   found via `gist::parser::frontmatter_body_offset`.
+/// - No frontmatter block at all: prepends a fresh
+///   `---\nlast_reviewed: <date>\n---\n` block. Not exercised by any
+///   acceptance scenario (every template that reaches `review` already
+///   has a block) — included so a hand-edited `index.md` with a stripped
+///   frontmatter block doesn't corrupt on `[k]eep`, at negligible cost.
+///
+/// A field whose existing value isn't a plain scalar (block scalar `|`/`>`,
+/// inline list `[...]`) has `value_range: None`; that falls through to the
+/// insert-new-line path, which would produce a duplicate `last_reviewed:`
+/// key. Acceptable only because no template ever writes `last_reviewed` as
+/// anything but a plain date scalar.
+pub fn write_last_reviewed(item: &std::path::Path) -> Result<(), ItemsError> {
+    let content = fs::read_to_string(item)?;
+    let today = chrono::Local::now()
+        .date_naive()
+        .format("%Y-%m-%d")
+        .to_string();
+    let note = gist::parser::parse(item, &content);
+
+    let new_content = match note.frontmatter {
+        Some(fm) => {
+            match fm
+                .fields
+                .iter()
+                .find(|f| f.key == "last_reviewed" && f.value_range.is_some())
+            {
+                Some(field) => {
+                    let range = field.value_range.clone().unwrap();
+                    format!(
+                        "{}{}{}",
+                        &content[..range.start],
+                        today,
+                        &content[range.end..]
+                    )
+                }
+                None => {
+                    let insert_at = gist::parser::frontmatter_body_offset(&content) - 5;
+                    format!(
+                        "{}\nlast_reviewed: {today}{}",
+                        &content[..insert_at],
+                        &content[insert_at..]
+                    )
+                }
+            }
+        }
+        None => format!("---\nlast_reviewed: {today}\n---\n{content}"),
+    };
+
+    fs::write(item, new_content)?;
+    Ok(())
+}
+
 /// Searches `Category::archivable()` (`Inbox`, `Project`, `Area`,
 /// `Resource`, in that order) for an item named `name`, returning the
 /// category it was found in and its actual on-disk root path — the
@@ -1363,5 +1426,64 @@ mod tests {
         assert_eq!(report.projects[0].reviewed_days_ago, None);
         assert_eq!(report.projects[1].name, "website-redesign");
         assert_eq!(report.projects[1].reviewed_days_ago, Some(3));
+    }
+
+    #[test]
+    fn write_last_reviewed_overwrites_existing_scalar_leaving_other_keys_and_body_untouched() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let content = "---\nlast_reviewed: 2020-01-01\ntags: [x]\n---\n# Title\nbody text\n";
+        let path = create(&ws, Category::Project, "my-project", content).unwrap();
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+
+        write_last_reviewed(&path).unwrap();
+
+        let new_content = fs::read_to_string(&path).unwrap();
+        assert!(new_content.contains(&format!("last_reviewed: {today}")));
+        assert!(new_content.contains("tags: [x]"));
+        assert!(new_content.contains("# Title\nbody text\n"));
+        assert!(!new_content.contains("2020-01-01"));
+    }
+
+    #[test]
+    fn write_last_reviewed_adds_absent_field_leaving_existing_frontmatter_and_body_untouched() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let content = "---\nlast_updated: 2020-01-01\n---\n# Title\nbody text\n";
+        let path = create(&ws, Category::Project, "my-project", content).unwrap();
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+
+        write_last_reviewed(&path).unwrap();
+
+        let new_content = fs::read_to_string(&path).unwrap();
+        assert!(new_content.contains(&format!("last_reviewed: {today}")));
+        assert!(new_content.contains("last_updated: 2020-01-01"));
+        assert!(new_content.contains("# Title\nbody text\n"));
+    }
+
+    #[test]
+    fn write_last_reviewed_prepends_block_when_none_exists() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let content = "# Title\nbody text\n";
+        let path = create(&ws, Category::Project, "my-project", content).unwrap();
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+
+        write_last_reviewed(&path).unwrap();
+
+        let new_content = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            new_content,
+            format!("---\nlast_reviewed: {today}\n---\n# Title\nbody text\n")
+        );
     }
 }

@@ -29,21 +29,40 @@ pub fn run(ws: &Workspace, ui: &mut dyn Ui) -> Result<(), ReviewError> {
     }
 
     for item in &projects {
-        prompt_one(ui, "Project", item)?;
+        prompt_one(ws, ui, Category::Project, "Project", item)?;
     }
     for item in &areas {
-        prompt_one(ui, "Area", item)?;
+        prompt_one(ws, ui, Category::Area, "Area", item)?;
     }
     Ok(())
 }
 
-fn prompt_one(ui: &mut dyn Ui, label: &str, item: &items::StatusItem) -> Result<(), ReviewError> {
+fn prompt_one(
+    ws: &Workspace,
+    ui: &mut dyn Ui,
+    category: Category,
+    label: &str,
+    item: &items::StatusItem,
+) -> Result<(), ReviewError> {
     let header = format!(
         "{label}: {} (last updated {})",
         item.name,
         format_age(item.updated_days_ago)
     );
-    ui.choose(&header, &[('k', "eep"), ('a', "rchive"), ('s', "kip")])?;
+    let choice = ui.choose(&header, &[('k', "eep"), ('a', "rchive"), ('s', "kip")])?;
+
+    match choice {
+        'k' => {
+            let index_path = items::item_path(ws, category, &item.name);
+            items::write_last_reviewed(&index_path)?;
+        }
+        'a' => {
+            let source_path = ws.category_dir(category).join(&item.name);
+            items::mv(ws, category, &source_path, &item.name, Category::Archive)?;
+        }
+        's' => {}
+        _ => unreachable!("Ui::choose only returns a char from the options it was given"),
+    }
     Ok(())
 }
 
@@ -190,5 +209,101 @@ mod tests {
         run(&ws, &mut ui).unwrap();
 
         assert_eq!(ui.headers.borrow().len(), 1);
+    }
+
+    #[test]
+    fn keep_stamps_last_reviewed_and_leaves_path_untouched() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Project, "my-project", "# My Project\n").unwrap();
+        let mut ui = FakeUi::with_responses(vec!['k']);
+
+        run(&ws, &mut ui).unwrap();
+
+        let path = dir.path().join("1-Projects/my-project/index.md");
+        assert!(path.exists());
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains(&format!("last_reviewed: {today}")));
+    }
+
+    #[test]
+    fn skip_touches_neither_path_nor_frontmatter() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let content = "---\nlast_reviewed: 2020-01-01\n---\n# My Project\n";
+        let path = items::create(&ws, Category::Project, "my-project", content).unwrap();
+        let mut ui = FakeUi::with_responses(vec!['s']);
+
+        run(&ws, &mut ui).unwrap();
+
+        assert!(path.exists());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
+    }
+
+    #[test]
+    fn archive_moves_project_under_archive_projects() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Project, "website-redesign", "# W\n").unwrap();
+        let mut ui = FakeUi::with_responses(vec!['a']);
+
+        run(&ws, &mut ui).unwrap();
+
+        assert!(!dir.path().join("1-Projects/website-redesign").exists());
+        assert!(
+            dir.path()
+                .join("4-Archive/Projects/website-redesign/index.md")
+                .exists()
+        );
+    }
+
+    #[test]
+    fn archive_moves_area_under_archive_areas() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Area, "finances", "# F\n").unwrap();
+        let mut ui = FakeUi::with_responses(vec!['a']);
+
+        run(&ws, &mut ui).unwrap();
+
+        assert!(!dir.path().join("2-Areas/finances").exists());
+        assert!(
+            dir.path()
+                .join("4-Archive/Areas/finances/index.md")
+                .exists()
+        );
+    }
+
+    #[test]
+    fn archiving_one_item_does_not_revisit_it_walk_continues() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Project, "my-project", "# M\n").unwrap();
+        items::create(&ws, Category::Project, "website-redesign", "# W\n").unwrap();
+        let mut ui = FakeUi::with_responses(vec!['a', 'k']);
+
+        run(&ws, &mut ui).unwrap();
+
+        let headers = ui.headers.borrow();
+        assert_eq!(headers.len(), 2);
+        assert!(headers[1].starts_with("Project: website-redesign"));
+    }
+
+    #[test]
+    fn archive_does_not_add_or_modify_last_reviewed() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Project, "my-project", "# My Project\n").unwrap();
+        let mut ui = FakeUi::with_responses(vec!['a']);
+
+        run(&ws, &mut ui).unwrap();
+
+        let path = dir.path().join("4-Archive/Projects/my-project/index.md");
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(!content.contains("last_reviewed"));
     }
 }

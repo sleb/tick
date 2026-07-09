@@ -10,8 +10,8 @@
 | `move`        | Story 001 done (per [docs/lld/012-tk-move.md](lld/012-tk-move.md)); Story 002 (unwrap-rejection guard) remaining                                                                                                                                                                                                                                                                                                              |
 | `archive`     | Not started                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `list`        | Stories 001, 002, 003, 005 done (base NAME/TITLE/UPDATED columns, archive qualified naming, substring filter, Title-falls-back-to-Name); 004 (empty-category message) remaining                                                                                                                                                                                                                                                                          |
-| `status`      | Stories 001–003 done (per-category counts per [docs/lld/009-status-counts.md](lld/009-status-counts.md); per-item Project/Area rows with `updated:`/`reviewed:` per [docs/lld/010-status-per-item.md](lld/010-status-per-item.md)); 004 remaining, blocked on `review`/`move`                                                                                                                                                       |
-| `review`      | Story 001 done (per [docs/lld/011-review-walk.md](lld/011-review-walk.md)); Stories 002/003 remaining — 002 (`[a]rchive`) unblocked now that `items::mv` exists, 003 (`[k]eep`/`[s]kip` frontmatter) blocked on `items::write_last_reviewed`                                                                                                                                                                                     |
+| `status`      | Stories 001–004 done (per-category counts per [docs/lld/009-status-counts.md](lld/009-status-counts.md); per-item Project/Area rows with `updated:`/`reviewed:` per [docs/lld/010-status-per-item.md](lld/010-status-per-item.md); `last_reviewed` write side per [docs/lld/013-review-keep-archive-skip.md](lld/013-review-keep-archive-skip.md))                                                                                 |
+| `review`      | Done — Stories 001–003 complete, per [docs/lld/011-review-walk.md](lld/011-review-walk.md) and [docs/lld/013-review-keep-archive-skip.md](lld/013-review-keep-archive-skip.md)                                                                                                                                                                                                                                                    |
 | `config`      | Layering done, and `config init`/`config init -g`/`config edit`/`config edit -g`/`#:schema` file are implemented — bare `tk config` (provenance display) is still open                                                                                                                                                                                                                                                |
 | `completions` | Done — `tk completions bash`/`zsh`/`fish`/`powershell`, per [docs/lld/008-completions.md](lld/008-completions.md)                                                                                                                                                                                                                                                                                                               |
 
@@ -165,9 +165,10 @@ Per-category counts, plus a per-item breakdown for Projects/Areas showing
 frontmatter field, `None` until an item has been kept in a review). No
 staleness threshold or flagging — `status` reports the facts and leaves
 judgment to the user. Needs `items::read_last_reviewed` /
-`items::write_last_reviewed` (see design.md); `write_last_reviewed` has no
-caller until item 7 (`review`) lands, but the read side is exercised by
-`status` alone. Covers user-stories/status.md.
+`items::write_last_reviewed` (see design.md); `write_last_reviewed`'s only
+caller is item 7 (`review`)'s `[k]eep` action, per
+[docs/lld/013-review-keep-archive-skip.md](lld/013-review-keep-archive-skip.md).
+Covers user-stories/status.md.
 
 ### 6. `tk move`
 
@@ -216,12 +217,12 @@ Story 001 (the walk itself — order, per-item prompt, empty/end-of-walk
 messaging) is done, per
 [docs/lld/011-review-walk.md](lld/011-review-walk.md); along the way `Ui::choose`
 was reshaped to a two-line header+options form and gained `Ui::info`, its
-first real callers. Story 002 (`[a]rchive` calling `items::mv`) is unblocked
-now that item 6 has landed; Story 003 (`[k]eep`/`[s]kip` writing
-`last_reviewed`) remains blocked on `items::write_last_reviewed`, which
-doesn't exist yet.
+first real callers. Stories 002 (`[a]rchive` calling `items::mv`) and 003
+(`[k]eep`/`[s]kip` writing `last_reviewed` via the new
+`items::write_last_reviewed`) are done, per
+[docs/lld/013-review-keep-archive-skip.md](lld/013-review-keep-archive-skip.md).
 
-- Covers user-stories/review.md 001–003.
+- Covers user-stories/review.md 001–003. Done.
 
 ### 8. `tk config` CLI surface
 
