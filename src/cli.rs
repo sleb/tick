@@ -236,6 +236,41 @@ pub fn run_list(
     Ok(lines.join("\n"))
 }
 
+/// Renders `items::status`'s counts as one `<Category> <count>` line per
+/// category, in `Inbox`/`Projects`/`Areas`/`Resources`/`Archive` order,
+/// name-column width sized the same way `run_list`'s NAME column is
+/// (longest label + 3). No per-item rows yet — status.md 002.
+pub fn run_status(ws: &Workspace) -> anyhow::Result<String> {
+    let categories = [
+        Category::Inbox,
+        Category::Project,
+        Category::Area,
+        Category::Resource,
+        Category::Archive,
+    ];
+    let report = items::status(ws)?;
+
+    let name_width = categories
+        .iter()
+        .map(|c| c.display_name().len())
+        .max()
+        .unwrap_or(0)
+        + 3;
+
+    let lines: Vec<String> = categories
+        .iter()
+        .map(|c| {
+            format!(
+                "{:<name_width$}{}",
+                c.display_name(),
+                report.counts[*c as usize]
+            )
+        })
+        .collect();
+
+    Ok(lines.join("\n"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1266,5 +1301,77 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], "NAME               TITLE              UPDATED");
         assert_eq!(lines[1], "website-redesign   Website Redesign   2 days ago");
+    }
+
+    #[test]
+    fn run_status_renders_five_line_summary() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let archive_dir = dir.path().join("4-Archive");
+
+        items::create(&ws, Category::Inbox, "a", "").unwrap();
+        items::create(&ws, Category::Inbox, "b", "").unwrap();
+
+        items::create(&ws, Category::Project, "p1", "").unwrap();
+        items::create(&ws, Category::Project, "p2", "").unwrap();
+        items::create(&ws, Category::Project, "p3", "").unwrap();
+
+        items::create(&ws, Category::Area, "a1", "").unwrap();
+        items::create(&ws, Category::Area, "a2", "").unwrap();
+
+        items::create(&ws, Category::Resource, "r1", "").unwrap();
+        items::create(&ws, Category::Resource, "r2", "").unwrap();
+        items::create(&ws, Category::Resource, "r3", "").unwrap();
+        items::create(&ws, Category::Resource, "r4", "").unwrap();
+        items::create(&ws, Category::Resource, "r5", "").unwrap();
+
+        for i in 0..3 {
+            let path = archive_dir.join("Inbox").join(format!("i{i}.md"));
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+        for i in 0..3 {
+            let path = archive_dir
+                .join("Projects")
+                .join(format!("p{i}"))
+                .join("index.md");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+        for i in 0..3 {
+            let path = archive_dir
+                .join("Areas")
+                .join(format!("a{i}"))
+                .join("index.md");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+        for i in 0..3 {
+            let path = archive_dir.join("Resources").join(format!("r{i}.md"));
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+
+        let output = run_status(&ws).unwrap();
+
+        assert_eq!(
+            output,
+            "Inbox       2\nProjects    3\nAreas       2\nResources   5\nArchive     12"
+        );
+    }
+
+    #[test]
+    fn run_status_on_empty_system_prints_all_zero_lines() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        let output = run_status(&ws).unwrap();
+
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 5);
+        for line in &lines {
+            assert!(line.ends_with('0'));
+            assert!(!line.contains("- "));
+        }
     }
 }

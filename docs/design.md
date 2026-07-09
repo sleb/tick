@@ -275,17 +275,22 @@ structured results — no printing, no prompting.
   the result into a filename) — `items` and `editor` share `gist` as a
   common dependency rather than depending on each other, per the module
   boundaries below.
+- `status(ws: &Workspace) -> Result<StatusReport>` where
+  `StatusReport { counts: [usize; 5] }` — `counts` is per-category totals in
+  `Category` order, computed by a private `count` that scans the same
+  directories `list` does but skips the content read/`infer_title` call
+  entirely. Implemented per
+  [009-status-counts.md](lld/009-status-counts.md) (`status.md` 001).
 - `struct StatusItem { name: String, title: String, updated_days_ago: u64, reviewed_days_ago: Option<u64> }`
   — one per `Project`/`Area`; `name`/`title`/`updated_days_ago` mirror
   `ListedItem` (same `infer_title` + mtime sourcing); `reviewed_days_ago` is
   the age of the item's `index.md` frontmatter `last_reviewed` field, or
-  `None` if the field is absent (never reviewed).
-- `status(ws: &Workspace) -> Result<StatusReport>` where
-  `StatusReport { counts: [usize; 5], projects: Vec<StatusItem>, areas: Vec<StatusItem> }`
-  — `counts` is per-category totals in `Category` order; `projects`/`areas`
-  are sorted alphabetically by `name`, same convention as `list`. There is no
-  staleness threshold or flagging — `status` reports the `updated_days_ago`/
-  `reviewed_days_ago` facts and leaves judgment to the user.
+  `None` if the field is absent (never reviewed). Lands with `status.md` 002,
+  along with `StatusReport` gaining `projects: Vec<StatusItem>, areas:
+  Vec<StatusItem>` fields (sorted alphabetically by `name`, same convention
+  as `list`). There is no staleness threshold or flagging — `status` reports
+  the `updated_days_ago`/`reviewed_days_ago` facts and leaves judgment to the
+  user.
 - `read_last_reviewed(ws: &Workspace, item: &Path) -> Result<Option<u64>>` —
   reads the `last_reviewed` frontmatter field from a `Project`/`Area`'s
   `index.md`, if present, and returns its age in days. Shared by `status`

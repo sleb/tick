@@ -33,10 +33,9 @@ Projects and areas are each sorted alphabetically by Name, matching `list`.
 
 ---
 
-## User Story 001
+## User Story 001 ✅
 
 - **Summary:** `status` prints a count per category
-- **Status:** Not started
 - **Depends on:** [new.md](new.md) Story 002, Story 003, Story 004, Story 005 (items to count across all five categories)
 
 ### Use Case

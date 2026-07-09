@@ -201,6 +201,57 @@ fn list_at(
     Ok(items)
 }
 
+/// Per-category item counts, indexed by `Category as usize` (same
+/// convention as `Config::category_dirs`). Doesn't read file content or
+/// infer titles — see `count`. The per-item `projects`/`areas` breakdown
+/// documented as `StatusReport`'s eventual shape in design.md lands with
+/// `status.md` 002; this is the counts-only slice.
+pub struct StatusReport {
+    pub counts: [usize; 5],
+}
+
+/// Counts `category`'s items without reading file content — cheaper than
+/// `list` for count-only categories (`Inbox`/`Resource`/`Archive`, which
+/// can grow large and never need a per-item breakdown per status.md's
+/// design). For `Archive`, sums counts across all four origin subfolders,
+/// mirroring `list_at`'s `Archive` branch minus the content read.
+fn count(ws: &Workspace, category: Category) -> Result<usize, ItemsError> {
+    let extension = &ws.config.default_extension;
+
+    if category == Category::Archive {
+        let archive_dir = ws.category_dir(Category::Archive);
+        let mut total = 0;
+        for origin in Category::archivable() {
+            let origin_dir = archive_dir.join(origin.archive_origin_name());
+            total += scan_dir(&origin_dir, origin.is_directory_style(), extension)?.len();
+        }
+        Ok(total)
+    } else {
+        let category_dir = ws.category_dir(category);
+        Ok(scan_dir(&category_dir, category.is_directory_style(), extension)?.len())
+    }
+}
+
+/// Builds the per-category counts summary for `tk status` (`status.md`
+/// 001). Counts-only slice of `StatusReport`'s eventual shape — see
+/// `StatusReport`.
+pub fn status(ws: &Workspace) -> Result<StatusReport, ItemsError> {
+    let categories = [
+        Category::Inbox,
+        Category::Project,
+        Category::Area,
+        Category::Resource,
+        Category::Archive,
+    ];
+
+    let mut counts = [0; 5];
+    for category in categories {
+        counts[category as usize] = count(ws, category)?;
+    }
+
+    Ok(StatusReport { counts })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -487,5 +538,151 @@ mod tests {
         let items = list_at(&ws, Category::Project, Some("nonexistent"), now).unwrap();
 
         assert!(items.is_empty());
+    }
+
+    #[test]
+    fn count_counts_flat_file_categories_without_reading_content() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        create(&ws, Category::Inbox, "a", "").unwrap();
+        create(&ws, Category::Inbox, "b", "").unwrap();
+
+        create(&ws, Category::Resource, "r1", "").unwrap();
+        create(&ws, Category::Resource, "r2", "").unwrap();
+        create(&ws, Category::Resource, "r3", "").unwrap();
+        create(&ws, Category::Resource, "r4", "").unwrap();
+        create(&ws, Category::Resource, "r5", "no heading here").unwrap();
+
+        assert_eq!(count(&ws, Category::Inbox).unwrap(), 2);
+        assert_eq!(count(&ws, Category::Resource).unwrap(), 5);
+    }
+
+    #[test]
+    fn count_counts_directory_style_categories() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        create(&ws, Category::Project, "p1", "").unwrap();
+        create(&ws, Category::Project, "p2", "").unwrap();
+        create(&ws, Category::Project, "p3", "").unwrap();
+
+        create(&ws, Category::Area, "a1", "").unwrap();
+        create(&ws, Category::Area, "a2", "").unwrap();
+
+        assert_eq!(count(&ws, Category::Project).unwrap(), 3);
+        assert_eq!(count(&ws, Category::Area).unwrap(), 2);
+    }
+
+    #[test]
+    fn count_sums_across_all_origin_subfolders_for_archive() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let archive_dir = dir.path().join("4-Archive");
+
+        for i in 0..3 {
+            let path = archive_dir.join("Inbox").join(format!("i{i}.md"));
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+        for i in 0..3 {
+            let path = archive_dir
+                .join("Projects")
+                .join(format!("p{i}"))
+                .join("index.md");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+        for i in 0..3 {
+            let path = archive_dir
+                .join("Areas")
+                .join(format!("a{i}"))
+                .join("index.md");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+        for i in 0..3 {
+            let path = archive_dir.join("Resources").join(format!("r{i}.md"));
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+
+        assert_eq!(count(&ws, Category::Archive).unwrap(), 12);
+    }
+
+    #[test]
+    fn count_returns_zero_for_missing_directory() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        assert_eq!(count(&ws, Category::Inbox).unwrap(), 0);
+        assert_eq!(count(&ws, Category::Project).unwrap(), 0);
+        assert_eq!(count(&ws, Category::Area).unwrap(), 0);
+        assert_eq!(count(&ws, Category::Resource).unwrap(), 0);
+        assert_eq!(count(&ws, Category::Archive).unwrap(), 0);
+    }
+
+    #[test]
+    fn status_returns_counts_indexed_by_category() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let archive_dir = dir.path().join("4-Archive");
+
+        create(&ws, Category::Inbox, "a", "").unwrap();
+        create(&ws, Category::Inbox, "b", "").unwrap();
+
+        create(&ws, Category::Project, "p1", "").unwrap();
+        create(&ws, Category::Project, "p2", "").unwrap();
+        create(&ws, Category::Project, "p3", "").unwrap();
+
+        create(&ws, Category::Area, "a1", "").unwrap();
+        create(&ws, Category::Area, "a2", "").unwrap();
+
+        create(&ws, Category::Resource, "r1", "").unwrap();
+        create(&ws, Category::Resource, "r2", "").unwrap();
+        create(&ws, Category::Resource, "r3", "").unwrap();
+        create(&ws, Category::Resource, "r4", "").unwrap();
+        create(&ws, Category::Resource, "r5", "").unwrap();
+
+        for i in 0..3 {
+            let path = archive_dir.join("Inbox").join(format!("i{i}.md"));
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+        for i in 0..3 {
+            let path = archive_dir
+                .join("Projects")
+                .join(format!("p{i}"))
+                .join("index.md");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+        for i in 0..3 {
+            let path = archive_dir
+                .join("Areas")
+                .join(format!("a{i}"))
+                .join("index.md");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+        for i in 0..3 {
+            let path = archive_dir.join("Resources").join(format!("r{i}.md"));
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+        }
+
+        let report = status(&ws).unwrap();
+
+        assert_eq!(report.counts, [2, 3, 2, 5, 12]);
+    }
+
+    #[test]
+    fn status_on_empty_workspace_returns_all_zero_counts() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        let report = status(&ws).unwrap();
+
+        assert_eq!(report.counts, [0, 0, 0, 0, 0]);
     }
 }

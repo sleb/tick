@@ -42,6 +42,8 @@ enum Commands {
     },
     /// Print a shell completion script for `tk` to stdout.
     Completions { shell: CompletionShell },
+    /// Print a per-category summary of the PARA system.
+    Status,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, clap::ValueEnum)]
@@ -232,6 +234,12 @@ fn main() -> anyhow::Result<()> {
         Commands::Completions { shell } => {
             io::stdout().write_all(&render_completions(shell))?;
         }
+        Commands::Status => {
+            let ws = Workspace::discover(&cwd, home_config.as_deref())
+                .context("failed to find a PARA workspace")?;
+            let output = cli::run_status(&ws)?;
+            println!("{output}");
+        }
     }
 
     Ok(())
@@ -344,6 +352,13 @@ mod tests {
         let cli = Cli::parse_from(["tk", "daily"]);
 
         assert_eq!(cli.command, Commands::Daily);
+    }
+
+    #[test]
+    fn parses_status() {
+        let cli = Cli::parse_from(["tk", "status"]);
+
+        assert_eq!(cli.command, Commands::Status);
     }
 
     #[test]
