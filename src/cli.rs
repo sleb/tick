@@ -428,6 +428,32 @@ pub fn run_unarchive(ws: &Workspace, name: &str) -> anyhow::Result<String> {
     ))
 }
 
+/// Names of every item in a live (non-`Archive`) category, across all four
+/// live categories, sourced from `ws` at call time. Used for `tk move`/
+/// `tk archive`'s tab-completion — the shapes `items::locate` matches on a
+/// bare name. A category whose directory doesn't exist yet, or that can't
+/// be read, contributes no names rather than failing the whole listing.
+pub fn live_item_names(ws: &Workspace) -> Vec<String> {
+    Category::archivable()
+        .into_iter()
+        .flat_map(|category| {
+            items::list(ws, category, None)
+                .map(|items| items.into_iter().map(|item| item.name).collect())
+                .unwrap_or_else(|_| Vec::new())
+        })
+        .collect()
+}
+
+/// Qualified `<OriginCategory>/<name>` names of every archived item,
+/// sourced from `ws` at call time. Used for `tk unarchive`'s (and `tk
+/// move`'s) tab-completion — the shape `items::locate` matches via its
+/// `name.split_once('/')` branch.
+pub fn archived_item_names(ws: &Workspace) -> Vec<String> {
+    items::list(ws, Category::Archive, None)
+        .map(|items| items.into_iter().map(|item| item.name).collect())
+        .unwrap_or_else(|_| Vec::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2052,5 +2078,84 @@ mod tests {
         let output = run_status(&ws).unwrap();
 
         assert!(output.contains("reviewed: 4 days ago"));
+    }
+
+    #[test]
+    fn live_item_names_lists_names_across_all_four_live_categories() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Inbox, "my-file", "hello").unwrap();
+        items::create(&ws, Category::Project, "website-redesign", "").unwrap();
+        items::create(&ws, Category::Area, "finances", "").unwrap();
+        items::create(&ws, Category::Resource, "recipe-ideas", "").unwrap();
+
+        let mut names = live_item_names(&ws);
+        names.sort();
+
+        assert_eq!(
+            names,
+            vec!["finances", "my-file", "recipe-ideas", "website-redesign"]
+        );
+    }
+
+    #[test]
+    fn live_item_names_on_uninitialized_workspace_is_empty() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        assert_eq!(live_item_names(&ws), Vec::<String>::new());
+    }
+
+    #[test]
+    fn archived_item_names_lists_qualified_names_from_multiple_origins() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let project_path = items::create(&ws, Category::Project, "website-redesign", "").unwrap();
+        let project_dir = project_path.parent().unwrap().to_path_buf();
+        items::mv(
+            &ws,
+            Category::Project,
+            &project_dir,
+            "website-redesign",
+            Category::Archive,
+        )
+        .unwrap();
+        let resource_path = items::create(&ws, Category::Resource, "my-file", "hello").unwrap();
+        items::mv(
+            &ws,
+            Category::Resource,
+            &resource_path,
+            "my-file",
+            Category::Archive,
+        )
+        .unwrap();
+
+        let mut names = archived_item_names(&ws);
+        names.sort();
+
+        assert_eq!(
+            names,
+            vec!["Projects/website-redesign", "Resources/my-file"]
+        );
+    }
+
+    #[test]
+    fn archived_item_names_excludes_live_items() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Project, "website-redesign", "").unwrap();
+        let resource_path = items::create(&ws, Category::Resource, "my-file", "hello").unwrap();
+        items::mv(
+            &ws,
+            Category::Resource,
+            &resource_path,
+            "my-file",
+            Category::Archive,
+        )
+        .unwrap();
+
+        let names = archived_item_names(&ws);
+
+        assert_eq!(names, vec!["Resources/my-file"]);
     }
 }

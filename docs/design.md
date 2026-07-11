@@ -232,6 +232,10 @@ argv-to-call-to-print shim and everything else is unit-testable. Notably:
 - Bare `tk config` (no subcommand) resolves and renders the effective config
   directly, bypassing `cli`, since `config::resolve`/`render_effective` are
   already infallible/pure enough not to need a `cli` wrapper.
+- `cli` owns the pure item-name-set logic backing tab-completion
+  (`live_item_names`/`archived_item_names`), both thin wrappers over
+  `items::list` — `main`'s completer functions call these and filter to the
+  in-progress argument's prefix.
 
 ## Appendix: notable invariants
 
@@ -246,3 +250,7 @@ argv-to-call-to-print shim and everything else is unit-testable. Notably:
 - `run_config_edit` distinguishes "created" from "already existed" by
   matching `config::init`'s `AlreadyExists` error variant rather than a
   `path.exists()` pre-check, avoiding a TOCTOU gap.
+- `tk completions <shell>` generates a dynamic-completion registration
+  snippet (`clap_complete::env`), not a static `aot` script — its content is
+  shell glue plus a callback into `tk` at completion time, not a per-command
+  listing baked in at generation time.

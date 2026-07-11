@@ -80,3 +80,39 @@
 - **When:** Tick generates the script
 - **Then:** the script includes completions for every top-level command in `tk`'s CLI definition (`init`, `new`, `daily`, `move`, `list`, `status`, `review`, `config`, `completions`), generated from that definition rather than a hand-maintained list
 - **and Then:** running `tk completions` again after a command or flag is added or removed (in a newer `tk` version) reflects that change automatically, with no separate update to the completion script's source
+
+---
+
+## User Story 004 ✅
+
+- **Summary:** Tab-complete a PARA item's name instead of having to know its exact qualified form
+- **Depends on:** Story 001 (the installed completion script this extends), [move.md](move.md) Story 001, Story 005 (`<OriginCategory>/<name>` addressing for archived items), [list.md](list.md) Story 001 (the item names being completed)
+
+### Use Case
+
+- **As a** Tick user running `tk move`, `tk archive`, or `tk unarchive` on an item
+- **I want to** tab-complete the item's name (including, for archived items, the `<OriginCategory>/<name>` qualified form) straight from what actually exists on disk
+- **so that** I don't have to guess or hand-type a name I might get subtly wrong — e.g. adding a `4-Archive/` prefix or a file extension that isn't part of the name `tk` expects
+
+### Acceptance Criteria
+
+- **Scenario:** Completing a live item's name
+- **Given:** `my-file.md` exists in `0-Inbox` and `website-redesign` exists as a directory under `1-Projects`
+- **When:** I type `tk move ` and press tab (having installed the generated completion script for my shell)
+- **Then:** the shell offers `my-file` and `website-redesign` as completions, without their file extension or directory prefix
+
+- **Scenario:** Completing an archived item's qualified name
+- **Given:** `meeting-notes.md` was archived from `0-Inbox` and now lives at `4-Archive/Inbox/meeting-notes.md`
+- **When:** I type `tk unarchive ` and press tab
+- **Then:** the shell offers `Inbox/meeting-notes` as a completion — the `<OriginCategory>/<name>` form `tk unarchive` expects, not the literal archive filesystem path
+
+- **Scenario:** Completions reflect the current directory's PARA system, not a fixed list
+- **Given:** I am in a directory containing a PARA system with a particular set of items
+- **When:** I request completions for an item-name argument
+- **Then:** the offered names are read from that PARA system at completion time
+- **and Then:** running the same completion in a different PARA system (or after items are added, moved, or archived) offers different names accordingly
+
+- **Scenario:** No PARA system in the current directory
+- **Given:** I am in a directory that is not a Tick-initialized PARA system
+- **When:** I request completions for an item-name argument
+- **Then:** the shell offers no item-name completions, and the completion attempt does not error out or hang

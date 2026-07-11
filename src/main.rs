@@ -1,9 +1,12 @@
 use std::env;
+use std::ffi::OsStr;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap_complete::engine::{ArgValueCompleter, CompletionCandidate};
+use clap_complete::env::{Bash, EnvCompleter, Fish, Powershell, Zsh};
 
 use tick::category::{Category, Kind};
 use tick::cli::{self, TerminalUi};
@@ -66,6 +69,7 @@ Examples:
     )]
     Move {
         /// Name of the item to relocate, as shown by `tk list`.
+        #[arg(add = ArgValueCompleter::new(complete_move_name))]
         name: String,
         /// Category to move the item into.
         target: MoveTarget,
@@ -80,6 +84,7 @@ Examples:
   tk archive apollo --yes   Archive it, accepting the suggested summary")]
     Archive {
         /// Name of the item to archive, as shown by `tk list`.
+        #[arg(add = ArgValueCompleter::new(complete_archive_name))]
         name: String,
         /// Accept the suggested archive summary without prompting.
         #[arg(short = 'y', long = "yes")]
@@ -92,6 +97,7 @@ Examples:
     Unarchive {
         /// Qualified `<OriginCategory>/<name>` of the archived item, as
         /// shown by `tk list archive`.
+        #[arg(add = ArgValueCompleter::new(complete_unarchive_name))]
         name: String,
     },
     /// Walk every project and area, prompting keep/archive/skip.
@@ -127,26 +133,61 @@ enum CompletionShell {
     Powershell,
 }
 
-impl From<CompletionShell> for clap_complete::Shell {
-    fn from(shell: CompletionShell) -> Self {
-        match shell {
-            CompletionShell::Bash => clap_complete::Shell::Bash,
-            CompletionShell::Zsh => clap_complete::Shell::Zsh,
-            CompletionShell::Fish => clap_complete::Shell::Fish,
-            CompletionShell::Powershell => clap_complete::Shell::PowerShell,
-        }
-    }
+/// Discovers a workspace from the current process's cwd/`$HOME`, applies
+/// `names` to it, and filters to candidates matching `current`'s prefix —
+/// the shared plumbing every `complete_*_name` function needs. Returns no
+/// candidates (never errors, never blocks) if no workspace is found,
+/// satisfying completions.md 004's "no PARA system" scenario.
+fn complete_item_name(
+    current: &OsStr,
+    names: impl Fn(&Workspace) -> Vec<String>,
+) -> Vec<CompletionCandidate> {
+    let Some(current) = current.to_str() else {
+        return vec![];
+    };
+    let Ok(cwd) = env::current_dir() else {
+        return vec![];
+    };
+    let Ok(ws) = Workspace::discover(&cwd, home_tick_toml().as_deref()) else {
+        return vec![];
+    };
+    names(&ws)
+        .into_iter()
+        .filter(|name| name.starts_with(current))
+        .map(CompletionCandidate::new)
+        .collect()
 }
 
-/// Renders `shell`'s completion script for the `tk` CLI into a byte buffer.
+fn complete_move_name(current: &OsStr) -> Vec<CompletionCandidate> {
+    complete_item_name(current, |ws| {
+        let mut names = cli::live_item_names(ws);
+        names.extend(cli::archived_item_names(ws));
+        names
+    })
+}
+
+fn complete_archive_name(current: &OsStr) -> Vec<CompletionCandidate> {
+    complete_item_name(current, cli::live_item_names)
+}
+
+fn complete_unarchive_name(current: &OsStr) -> Vec<CompletionCandidate> {
+    complete_item_name(current, cli::archived_item_names)
+}
+
+/// Writes the `clap_complete::env` registration snippet for `shell` — shell
+/// glue that re-invokes `tk` (via `$PATH`) at completion time — rather than
+/// a static per-command script.
 fn render_completions(shell: CompletionShell) -> Vec<u8> {
     let mut buf = Vec::new();
-    clap_complete::generate(
-        clap_complete::Shell::from(shell),
-        &mut Cli::command(),
-        "tk",
-        &mut buf,
-    );
+    let completer: &dyn EnvCompleter = match shell {
+        CompletionShell::Bash => &Bash,
+        CompletionShell::Zsh => &Zsh,
+        CompletionShell::Fish => &Fish,
+        CompletionShell::Powershell => &Powershell,
+    };
+    completer
+        .write_registration("COMPLETE", "tk", "tk", "tk", &mut buf)
+        .expect("writing to an in-memory buffer never fails");
     buf
 }
 
@@ -249,6 +290,8 @@ fn run_daily_command(ws: &Workspace) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
+    clap_complete::CompleteEnv::with_factory(Cli::command).complete();
+
     env_logger::init();
     let cli = Cli::parse();
 
@@ -366,6 +409,7 @@ fn main() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn parses_new_with_filename() {
@@ -913,14 +957,198 @@ mod tests {
 
     #[test]
     fn completions_cover_every_top_level_command() {
-        let script = render_completions(CompletionShell::Bash);
-        let script = String::from_utf8(script).unwrap();
+        let candidates = complete(&["tk", ""], 1);
 
-        for command in ["init", "new", "daily", "list", "config", "completions"] {
+        for command in [
+            "init",
+            "new",
+            "daily",
+            "list",
+            "config",
+            "move",
+            "archive",
+            "unarchive",
+            "status",
+            "review",
+            "completions",
+        ] {
             assert!(
-                script.contains(command),
-                "expected script to contain {command}"
+                candidates.contains(&command.to_string()),
+                "expected {command} among top-level completions, got {candidates:?}"
             );
         }
+    }
+
+    /// Drives `clap_complete::engine::complete()` against `Cli::command()`
+    /// for `args`, completing the argument at `arg_index`, and returns the
+    /// candidates' string values, excluding flag candidates (e.g.
+    /// `--help`) — the dynamic engine always offers those alongside a
+    /// positional's own value completions, but they're not part of what
+    /// these tests are checking.
+    fn complete(args: &[&str], arg_index: usize) -> Vec<String> {
+        let args: Vec<std::ffi::OsString> = args.iter().map(std::ffi::OsString::from).collect();
+        clap_complete::engine::complete(&mut Cli::command(), args, arg_index, None)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.get_value().to_string_lossy().into_owned())
+            .filter(|value| !value.starts_with('-'))
+            .collect()
+    }
+
+    /// Serializes tests that change the process's current directory —
+    /// `env::current_dir` is process-global state, and `cargo test` runs
+    /// tests in parallel within one process.
+    static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Writes an empty `.tick.toml` marker at `root` (matching
+    /// `workspace::init`'s discovery contract) and returns a `Workspace`
+    /// rooted there with default config, for tests that need a real
+    /// on-disk PARA system for `Workspace::discover` to find via cwd.
+    fn init_workspace(root: &Path) -> Workspace {
+        fs::write(root.join(".tick.toml"), "").unwrap();
+        Workspace {
+            root: root.to_path_buf(),
+            config: tick::config::Config::default(),
+        }
+    }
+
+    #[test]
+    fn completes_a_live_items_bare_name() {
+        let _guard = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let original_cwd = env::current_dir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let ws = init_workspace(dir.path());
+        tick::items::create(&ws, tick::category::Category::Inbox, "my-file", "hello").unwrap();
+        tick::items::create(
+            &ws,
+            tick::category::Category::Project,
+            "website-redesign",
+            "",
+        )
+        .unwrap();
+        env::set_current_dir(dir.path()).unwrap();
+
+        let candidates = complete(&["tk", "move", ""], 2);
+
+        env::set_current_dir(original_cwd).unwrap();
+        let mut candidates = candidates;
+        candidates.sort();
+        assert_eq!(candidates, vec!["my-file", "website-redesign"]);
+    }
+
+    #[test]
+    fn completes_an_archived_items_qualified_name() {
+        let _guard = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let original_cwd = env::current_dir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let ws = init_workspace(dir.path());
+        let path =
+            tick::items::create(&ws, tick::category::Category::Inbox, "meeting-notes", "").unwrap();
+        tick::items::mv(
+            &ws,
+            tick::category::Category::Inbox,
+            &path,
+            "meeting-notes",
+            tick::category::Category::Archive,
+        )
+        .unwrap();
+        env::set_current_dir(dir.path()).unwrap();
+
+        let candidates = complete(&["tk", "unarchive", ""], 2);
+
+        env::set_current_dir(original_cwd).unwrap();
+        assert_eq!(candidates, vec!["Inbox/meeting-notes"]);
+    }
+
+    #[test]
+    fn archive_completion_excludes_archived_items() {
+        let _guard = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let original_cwd = env::current_dir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let ws = init_workspace(dir.path());
+        tick::items::create(&ws, tick::category::Category::Project, "apollo", "").unwrap();
+        let path =
+            tick::items::create(&ws, tick::category::Category::Inbox, "meeting-notes", "").unwrap();
+        tick::items::mv(
+            &ws,
+            tick::category::Category::Inbox,
+            &path,
+            "meeting-notes",
+            tick::category::Category::Archive,
+        )
+        .unwrap();
+        env::set_current_dir(dir.path()).unwrap();
+
+        let candidates = complete(&["tk", "archive", ""], 2);
+
+        env::set_current_dir(original_cwd).unwrap();
+        assert_eq!(candidates, vec!["apollo"]);
+    }
+
+    #[test]
+    fn move_completion_includes_both_live_and_archived_items() {
+        let _guard = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let original_cwd = env::current_dir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let ws = init_workspace(dir.path());
+        tick::items::create(&ws, tick::category::Category::Project, "apollo", "").unwrap();
+        let path =
+            tick::items::create(&ws, tick::category::Category::Inbox, "meeting-notes", "").unwrap();
+        tick::items::mv(
+            &ws,
+            tick::category::Category::Inbox,
+            &path,
+            "meeting-notes",
+            tick::category::Category::Archive,
+        )
+        .unwrap();
+        env::set_current_dir(dir.path()).unwrap();
+
+        let mut candidates = complete(&["tk", "move", ""], 2);
+
+        env::set_current_dir(original_cwd).unwrap();
+        candidates.sort();
+        assert_eq!(candidates, vec!["Inbox/meeting-notes", "apollo"]);
+    }
+
+    #[test]
+    fn completions_reflect_the_current_directorys_para_system() {
+        let _guard = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let original_cwd = env::current_dir().unwrap();
+        let first = tempfile::tempdir().unwrap();
+        let first_ws = init_workspace(first.path());
+        tick::items::create(&first_ws, tick::category::Category::Inbox, "first-item", "").unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let second_ws = init_workspace(second.path());
+        tick::items::create(
+            &second_ws,
+            tick::category::Category::Inbox,
+            "second-item",
+            "",
+        )
+        .unwrap();
+
+        env::set_current_dir(first.path()).unwrap();
+        let first_candidates = complete(&["tk", "move", ""], 2);
+        env::set_current_dir(second.path()).unwrap();
+        let second_candidates = complete(&["tk", "move", ""], 2);
+
+        env::set_current_dir(original_cwd).unwrap();
+        assert_eq!(first_candidates, vec!["first-item"]);
+        assert_eq!(second_candidates, vec!["second-item"]);
+        assert_ne!(first_candidates, second_candidates);
+    }
+
+    #[test]
+    fn no_para_system_yields_no_item_name_completions() {
+        let _guard = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let original_cwd = env::current_dir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        env::set_current_dir(dir.path()).unwrap();
+
+        let candidates = complete(&["tk", "move", ""], 2);
+
+        env::set_current_dir(original_cwd).unwrap();
+        assert!(candidates.is_empty());
     }
 }
