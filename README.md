@@ -72,15 +72,14 @@ Archive    0
 | `init [name]`                                             | Initialize a new PARA system                                                                                                                                                                                                                                                                                                                        |
 | `new [filename] [--project\|--area\|--resource\|--daily]` | Capture a new note. Defaults to the Inbox; pass `--project` or `--area` to scaffold a directory with an `index.md`, or `--resource` for a flat file. Omit `filename` to capture in `$EDITOR`, which will suggest a name for you to confirm or override. `--daily` creates (or opens) today's note and takes no `filename`; see [`tk daily`](#daily) |
 | `daily`                                                   | Create (or open) today's daily note in the Inbox                                                                                                                                                                                                                                                                                                    |
-| `mv <item> <category>`                                     | Move a file or project/area directory to `inbox`, `project`, `area`, `resource`, or `archive`. Archiving preserves which category the item came from                                                                                                                                                                                                |
-| `archive <item>`                                           | Sugar for `mv <item> archive`. Also stamps a summary into the item's frontmatter. Keeping editor quick-open excludes and a `CLAUDE.md` agent instruction up to date so the archive stays out of the way is set up once, at `tk init` time *(not yet implemented)*                                                                                  |
+| `move <item> <category>` (alias `mv`)                     | Move a file or project/area directory to `inbox`, `project`, `area`, `resource`, or `archive`. Archiving preserves which category the item came from. Also accepts an already-archived item's `<OriginCategory>/<name>` — moving it to anything other than `archive` un-archives it                                                               |
+| `archive <item>`                                          | Sugar for `move <item> archive`. Also stamps a summary into the item's frontmatter                                                                                                                                                                                                                                                                  |
+| `unarchive <OriginCategory>/<name>`                       | Restore an archived item to the category it was archived from. Sugar for `move` with the origin implied by the qualified name, so you don't have to spell out the destination                                                                                                                                                                     |
 | `list <category> [filter]`                                | List items in a category (`inbox`, `project`, `area`, `resource`, or `archive`) with their inferred title and last-modified time, optionally filtered by name or title                                                                                                                                                                              |
 | `status`                                                  | Show item counts per category, plus last-updated/last-reviewed facts for projects and areas                                                                                                                                                                                                                                                                                         |
-| `review` *(not yet implemented)*                            | Walk through projects and areas one by one for a weekly review                                                                                                                                                                                                                                                                                      |
+| `review`                                                  | Walk through projects and areas one by one for a weekly review                                                                                                                                                                                                                                                                                      |
 | `config [init\|edit] [-g\|--global]`                      | View the effective config, or initialize/edit `.tick.toml`; `-g` targets `~/.tick.toml` instead of the local one                                                                                                                                                                                                                                    |
-| `completions <shell>`                                     | Generate a shell completion script                                                                                                                                                                                                                                                                                                                  |
-
-`review` is documented below as designed, target behavior — it doesn't exist in `tk` yet, and running it today will hit a clap parse error rather than doing anything.
+| `completions <shell>`                                     | Print a shell completion script's registration snippet to stdout. Once installed, item names (and, for `unarchive`, their `<OriginCategory>/<name>` qualified form) tab-complete straight from the current directory's PARA system                                                                                                                |
 
 Files created without an extension default to `.md`.
 
@@ -151,12 +150,17 @@ tk move <item> <inbox|project|area|resource|archive>
 
 Moves an existing file or project/area directory to the given category. Moving a flat file into `project` or `area` wraps it into a new directory with an `index.md`; moving to `archive` preserves which category the item came from, filing it under a matching subfolder.
 
+`<item>` also accepts an already-archived item's qualified `<OriginCategory>/<name>` form (as shown by `tk list archive`); moving it to anything other than `archive` un-archives it — sugar for this is [`tk unarchive`](#unarchive).
+
 ```
 $ tk move my-file.md project
 Moved ./0-Inbox/my-file.md to ./1-Projects/my-file/index.md
 
 $ tk mv my-project archive
 Moved ./1-Projects/my-project to ./4-Archive/Projects/my-project
+
+$ tk mv Projects/my-project project
+Moved ./4-Archive/Projects/my-project to ./1-Projects/my-project
 ```
 
 Moving a `project`/`area` directory to `inbox` or `resource` (unwrapping a directory back into a flat file) is not yet supported — `tk move` rejects it with an error rather than guessing which file to keep.
@@ -169,13 +173,31 @@ tk archive <item>
 
 Sugar for `tk move <item> archive` — files an item away without having to name the destination category. It takes no category argument, since the destination is always `archive`.
 
-- It prompts for a one-line summary of the item (defaulting to its inferred title, or its existing `summary` frontmatter field if it has one), and stamps it into the item's frontmatter before moving it — so a listing or a quick look at the frontmatter is enough to know what an archived item was, without reading the whole thing.
-- *Not yet implemented:* keeping `.vscode/settings.json` (`files.exclude`/`search.exclude`) and `.zed/settings.json` (`file_scan_exclude`) up to date with the configured archive folder name, and keeping a `CLAUDE.md` instruction not to read the archive folder unless explicitly asked or there's a strong reason to — both set up once, at `tk init` time, rather than on every archiving move.
+It prompts for a one-line summary of the item (defaulting to its inferred title, or its existing `summary` frontmatter field if it has one), and stamps it into the item's frontmatter before moving it — so a listing or a quick look at the frontmatter is enough to know what an archived item was, without reading the whole thing.
 
 ```
 $ tk archive my-project
 Summary for my-project? [My Project]
 Moved ./1-Projects/my-project to ./4-Archive/Projects/my-project
+```
+
+`tk init` keeps `.vscode/settings.json` (`files.exclude`/`search.exclude`) and `.zed/settings.json` (`file_scan_exclude`) up to date with the configured archive folder name, and keeps a `CLAUDE.md` instruction not to read the archive folder unless explicitly asked or there's a strong reason to — both set up once, at init time, rather than on every archiving move.
+
+### `unarchive`
+
+```
+tk unarchive <OriginCategory>/<name>
+```
+
+Restores an archived item to the category it was archived from — sugar for `tk move <OriginCategory>/<name> <origin-as-target>`, so un-archiving never requires spelling out a destination the qualified name already encodes. `<OriginCategory>/<name>` is the qualified name `tk list archive` shows for the item.
+
+```
+$ tk list archive
+NAME                         TITLE            UPDATED
+Projects/my-project          My Project       21 days ago
+
+$ tk unarchive Projects/my-project
+Moved ./4-Archive/Projects/my-project to ./1-Projects/my-project
 ```
 
 ### `list`
@@ -235,8 +257,6 @@ Archive     12
 ```
 
 ### `review`
-
-*Not yet implemented — described here as designed, target behavior.*
 
 ```
 tk review
@@ -301,7 +321,7 @@ resource = """
 tk completions <bash|zsh|fish|powershell>
 ```
 
-Prints a shell completion script to stdout.
+Prints a small registration snippet to stdout — shell glue that calls back into `tk` (via `$PATH`) whenever you press tab, rather than a fixed script baked with today's commands. That means completions always match whichever `tk` is currently installed, with nothing to regenerate after an upgrade — and it's how item names get completed: `tk move`, `tk archive`, and `tk unarchive`'s `<item>`/`<name>` argument tab-completes from the current directory's actual PARA system (bare names for `move`/`archive`, the `<OriginCategory>/<name>` qualified form for `unarchive`), read fresh on every request. Outside a PARA system, item-name completion just offers nothing rather than erroring.
 
 ```
 $ tk completions zsh > ~/.zsh/completions/_tk
