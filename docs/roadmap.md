@@ -6,18 +6,18 @@
 
 ## Commands
 
-| Command       | Notes                                                                           |
-| ------------- | ------------------------------------------------------------------------------- |
-| `init`        | Done                                                                            |
-| `new`         | Done                                                                            |
-| `daily`       | Done                                                                            |
-| `move`        | Done                                                                            |
-| `archive`     | Done                                                                            |
-| `list`        | Done                                                                            |
-| `status`      | Done                                                                            |
-| `review`      | Done                                                                            |
-| `config`      | Done                                                                            |
-| `completions` | Done                                                                             |
+| Command       | Notes |
+| ------------- | ----- |
+| `init`        | Done  |
+| `new`         | Done  |
+| `daily`       | Done  |
+| `move`        | Done  |
+| `archive`     | Done  |
+| `list`        | Done  |
+| `status`      | Done  |
+| `review`      | Done  |
+| `config`      | Done  |
+| `completions` | Done  |
 
 ## Outstanding stories
 
