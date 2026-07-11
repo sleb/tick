@@ -20,8 +20,8 @@ fn daily_first_run_creates_non_interactively_via_real_dispatch() {
     assert_eq!(
         common::stdout(&output),
         format!(
-            "Created {}\nNext: tk list to see it, or tk status for an overview.\n",
-            expected_path.display()
+            "Created inbox/{}.md\nNext: tk list to see it, or tk status for an overview.\n",
+            today()
         )
     );
     assert!(expected_path.is_file());
@@ -72,8 +72,8 @@ fn new_daily_flag_reaches_same_behavior_as_daily_command() {
     assert_eq!(
         common::stdout(&output),
         format!(
-            "Created {}\nNext: tk list to see it, or tk status for an overview.\n",
-            expected_path.display()
+            "Created inbox/{}.md\nNext: tk list to see it, or tk status for an overview.\n",
+            today()
         )
     );
     assert!(expected_path.is_file());

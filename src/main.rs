@@ -283,7 +283,7 @@ fn run_daily_command(ws: &Workspace) -> anyhow::Result<()> {
     }
     let editor = RealEditor;
     if let cli::DailyOutcome::Created(path) = cli::run_daily(ws, &editor)? {
-        println!("Created {}", path.display());
+        println!("Created {}", cli::display_path(ws, &path));
         println!("Next: tk list to see it, or tk status for an overview.");
     }
     Ok(())
@@ -334,7 +334,7 @@ fn main() -> anyhow::Result<()> {
             let editor = RealEditor;
             let mut ui = TerminalUi;
             let path = cli::run_new(&ws, &editor, &mut ui, category.into_kind(), filename, yes)?;
-            println!("Created {}", path.display());
+            println!("Created {}", cli::display_path(&ws, &path));
             println!("Next: tk list to see it, or tk status for an overview.");
         }
         Commands::Config {

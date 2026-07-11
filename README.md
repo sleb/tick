@@ -52,10 +52,10 @@ Created PARA system in ./my-para
 
 $ cd my-para
 $ tk new meeting-notes
-Created ./0-Inbox/meeting-notes.md
+Created inbox/meeting-notes.md
 
 $ tk new --project website-redesign
-Created ./1-Projects/website-redesign/index.md
+Created projects/website-redesign/index.md
 
 $ tk status
 Inbox      1
@@ -115,13 +115,13 @@ For `--project` and `--area`, this scaffolds a directory named after `filename` 
 $ tk new
 Opening $EDITOR...
 Create "website-improvement-ideas.md"?
-Created ./0-Inbox/website-improvement-ideas.md
+Created inbox/website-improvement-ideas.md
 
 $ tk new my-file
-Created ./0-Inbox/my-file.md
+Created inbox/my-file.md
 
 $ tk new --project my-project
-Created ./1-Projects/my-project/index.md
+Created projects/my-project/index.md
 ```
 
 ### `daily`
@@ -134,7 +134,7 @@ Creates (or opens) today's daily note in the Inbox, named for the current date. 
 
 ```
 $ tk daily
-Created ./0-Inbox/2026-06-30.md
+Created inbox/2026-06-30.md
 
 $ tk daily
 Opening $EDITOR...
@@ -154,13 +154,13 @@ Moves an existing file or project/area directory to the given category. Moving a
 
 ```
 $ tk move my-file.md project
-Moved ./0-Inbox/my-file.md to ./1-Projects/my-file/index.md
+Moved inbox/my-file.md to projects/my-file/index.md
 
 $ tk mv my-project archive
-Moved ./1-Projects/my-project to ./4-Archive/Projects/my-project
+Moved projects/my-project to archive/projects/my-project
 
 $ tk mv Projects/my-project project
-Moved ./4-Archive/Projects/my-project to ./1-Projects/my-project
+Moved archive/projects/my-project to projects/my-project
 ```
 
 Moving a `project`/`area` directory to `inbox` or `resource` (unwrapping a directory back into a flat file) is not yet supported — `tk move` rejects it with an error rather than guessing which file to keep.
@@ -178,7 +178,7 @@ It prompts for a one-line summary of the item (defaulting to its inferred title,
 ```
 $ tk archive my-project
 Summary for my-project? [My Project]
-Moved ./1-Projects/my-project to ./4-Archive/Projects/my-project
+Moved projects/my-project to archive/projects/my-project
 ```
 
 `tk init` keeps `.vscode/settings.json` (`files.exclude`/`search.exclude`) and `.zed/settings.json` (`file_scan_exclude`) up to date with the configured archive folder name, and keeps a `CLAUDE.md` instruction not to read the archive folder unless explicitly asked or there's a strong reason to — both set up once, at init time, rather than on every archiving move.
@@ -197,7 +197,7 @@ NAME                         TITLE            UPDATED
 Projects/my-project          My Project       21 days ago
 
 $ tk unarchive Projects/my-project
-Moved ./4-Archive/Projects/my-project to ./1-Projects/my-project
+Moved archive/projects/my-project to projects/my-project
 ```
 
 ### `list`

@@ -25,11 +25,7 @@ fn move_relocates_flat_file_into_project_via_real_dispatch() {
     let dest_path = root.join("1-Projects/my-file/index.md");
     assert_eq!(
         common::stdout(&output),
-        format!(
-            "Moved {} to {}\n",
-            source_path.display(),
-            dest_path.display()
-        )
+        "Moved inbox/my-file.md to projects/my-file/index.md\n"
     );
     assert!(dest_path.is_file());
     assert!(!source_path.exists());

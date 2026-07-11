@@ -356,12 +356,52 @@ fn render_status_items(items: &[items::StatusItem]) -> Vec<String> {
         .collect()
 }
 
+/// Renders `path` for user-facing messages: relative to the workspace root,
+/// with the (possibly custom-configured) numbered category folder replaced
+/// by its lowercase canonical name, e.g. `0-Inbox/notes.md` ->
+/// `inbox/notes.md`, and — for items filed under `Archive` — the origin
+/// subfolder lowercased too, e.g. `4-Archive/Projects/foo` ->
+/// `archive/projects/foo`. Falls back to `path` as-is (absolute or
+/// otherwise unmodified) if it isn't inside any of the five category
+/// folders.
+pub fn display_path(ws: &Workspace, path: &Path) -> String {
+    for category in [
+        Category::Inbox,
+        Category::Project,
+        Category::Area,
+        Category::Resource,
+        Category::Archive,
+    ] {
+        let Ok(rest) = path.strip_prefix(ws.category_dir(category)) else {
+            continue;
+        };
+
+        let mut display = PathBuf::from(category.display_name().to_lowercase());
+        if category == Category::Archive {
+            let mut components = rest.components();
+            if let Some(origin) = components.next() {
+                let word = origin.as_os_str().to_string_lossy();
+                let lowered = Category::archivable()
+                    .into_iter()
+                    .find(|c| c.archive_origin_name() == word)
+                    .map(|c| c.archive_origin_name().to_lowercase())
+                    .unwrap_or_else(|| word.into_owned());
+                display.push(lowered);
+            }
+            display.push(components.as_path());
+        } else {
+            display.push(rest);
+        }
+        return display.display().to_string();
+    }
+    path.display().to_string()
+}
+
 /// Locates `name` via `items::locate`, moves it to `target` via
 /// `items::mv`, and returns the exact confirmation message `main` prints:
-/// `Moved <source path> to <dest path>` (move.md 001's message shape,
-/// paths rendered the same way `run_new`'s `Created <path>` does — full
-/// paths as returned by the filesystem calls, not user-relative
-/// shorthand). When `target == Category::Archive`, prompts for a summary
+/// `Moved <source path> to <dest path>` (move.md 001's message shape),
+/// with both paths rendered via `display_path` (workspace-root-relative,
+/// lowercase category names). When `target == Category::Archive`, prompts for a summary
 /// (defaulting per `items::summary_default`) and stamps it via
 /// `items::write_summary` before the move — the summary must land in the
 /// item's frontmatter before `mv` relocates it (move.md 006). For any other
@@ -391,8 +431,8 @@ pub fn run_move(
     let dest_path = items::mv(ws, source, &source_path, name, target)?;
     Ok(format!(
         "Moved {} to {}",
-        source_path.display(),
-        dest_path.display()
+        display_path(ws, &source_path),
+        display_path(ws, &dest_path)
     ))
 }
 
@@ -423,8 +463,8 @@ pub fn run_unarchive(ws: &Workspace, name: &str) -> anyhow::Result<String> {
     let dest_path = items::mv(ws, source, &source_path, name, target)?;
     Ok(format!(
         "Moved {} to {}",
-        source_path.display(),
-        dest_path.display()
+        display_path(ws, &source_path),
+        display_path(ws, &dest_path)
     ))
 }
 
@@ -1773,17 +1813,16 @@ mod tests {
     fn run_move_returns_moved_message() {
         let dir = tempdir().unwrap();
         let ws = workspace(dir.path());
-        let source_path = items::create(&ws, Category::Inbox, "my-file", "hello").unwrap();
+        items::create(&ws, Category::Inbox, "my-file", "hello").unwrap();
         let mut ui = FakeUi {
             confirm_response: String::new(),
         };
 
         let message = run_move(&ws, &mut ui, "my-file", Category::Project, false).unwrap();
 
-        let dest_path = dir.path().join("1-Projects/my-file/index.md");
         assert_eq!(
             message,
-            format!("Moved {} to {}", source_path.display(), dest_path.display())
+            "Moved inbox/my-file.md to projects/my-file/index.md"
         );
     }
 
@@ -1946,11 +1985,7 @@ mod tests {
         let dest_path = dir.path().join("1-Projects/website-redesign");
         assert_eq!(
             message,
-            format!(
-                "Moved {} to {}",
-                archived.parent().unwrap().display(),
-                dest_path.display()
-            )
+            "Moved archive/projects/website-redesign to projects/website-redesign"
         );
         assert_eq!(
             fs::read_to_string(dest_path.join("index.md")).unwrap(),
@@ -1971,7 +2006,7 @@ mod tests {
         let dest_path = dir.path().join("3-Resources/my-file.md");
         assert_eq!(
             message,
-            format!("Moved {} to {}", archived.display(), dest_path.display())
+            "Moved archive/resources/my-file.md to resources/my-file.md"
         );
         assert_eq!(fs::read_to_string(&dest_path).unwrap(), "hello");
     }
