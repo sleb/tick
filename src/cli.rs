@@ -3,6 +3,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use chrono::Local;
+use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -255,6 +256,13 @@ pub fn run_list(
         });
     }
 
+    let display_names: Vec<String> = items
+        .iter()
+        .map(|i| match i.origin {
+            Some(origin) => format!("{}/{}", origin.archive_origin_name(), i.name),
+            None => i.name.clone(),
+        })
+        .collect();
     let ages: Vec<String> = items
         .iter()
         .map(|i| format_age(i.updated_days_ago))
@@ -262,7 +270,7 @@ pub fn run_list(
 
     let name_width = ["NAME"]
         .into_iter()
-        .chain(items.iter().map(|i| i.name.as_str()))
+        .chain(display_names.iter().map(String::as_str))
         .map(str::len)
         .max()
         .unwrap_or(0)
@@ -280,13 +288,90 @@ pub fn run_list(
         "{:<name_width$}{:<title_width$}UPDATED",
         "NAME", "TITLE"
     ));
-    for (item, age) in items.iter().zip(ages.iter()) {
+    for ((item, name), age) in items.iter().zip(display_names.iter()).zip(ages.iter()) {
         lines.push(format!(
             "{:<name_width$}{:<title_width$}{age}",
-            item.name, item.title
+            name, item.title
         ));
     }
     Ok(lines.join("\n"))
+}
+
+#[derive(Serialize)]
+struct ListRowJson {
+    name: String,
+    title: String,
+    updated_days_ago: u64,
+    path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    origin: Option<&'static str>,
+}
+
+/// `items::list`'s rows as a JSON array — `list.md` 006. Prints `[]` for
+/// an empty result (no items, or a filter matching nothing), never the
+/// human-readable message.
+pub fn run_list_json(
+    ws: &Workspace,
+    category: Category,
+    filter: Option<&str>,
+) -> anyhow::Result<String> {
+    let items = items::list(ws, category, filter)?;
+    let rows: Vec<ListRowJson> = items
+        .into_iter()
+        .map(|item| ListRowJson {
+            name: item.name,
+            title: item.title,
+            updated_days_ago: item.updated_days_ago,
+            path: item.path,
+            origin: item.origin.map(|c| c.key()),
+        })
+        .collect();
+    Ok(serde_json::to_string_pretty(&rows).expect("ListRowJson is always representable as JSON"))
+}
+
+#[derive(Serialize)]
+struct StatusItemJson {
+    name: String,
+    title: String,
+    updated_days_ago: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reviewed_days_ago: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct StatusReportJson {
+    inbox: usize,
+    project: Vec<StatusItemJson>,
+    area: Vec<StatusItemJson>,
+    resource: usize,
+    archive: usize,
+}
+
+/// `items::status`'s report as a JSON object — `status.md` 005. Counts use
+/// the same lowercase keys as `Category::key()`; `project`/`area` are
+/// arrays, `inbox`/`resource`/`archive` stay plain numbers.
+pub fn run_status_json(ws: &Workspace) -> anyhow::Result<String> {
+    let report = items::status(ws)?;
+    let to_json = |items: Vec<items::StatusItem>| -> Vec<StatusItemJson> {
+        items
+            .into_iter()
+            .map(|item| StatusItemJson {
+                name: item.name,
+                title: item.title,
+                updated_days_ago: item.updated_days_ago,
+                reviewed_days_ago: item.reviewed_days_ago,
+            })
+            .collect()
+    };
+    let json = StatusReportJson {
+        inbox: report.counts[Category::Inbox as usize],
+        project: to_json(report.projects),
+        area: to_json(report.areas),
+        resource: report.counts[Category::Resource as usize],
+        archive: report.counts[Category::Archive as usize],
+    };
+    Ok(serde_json::to_string_pretty(&json)
+        .expect("StatusReportJson is always representable as JSON"))
 }
 
 /// Renders `items::status`'s counts as one `<Category> <count>` line per
@@ -516,7 +601,15 @@ pub fn live_item_names(ws: &Workspace) -> Vec<String> {
 /// `name.split_once('/')` branch.
 pub fn archived_item_names(ws: &Workspace) -> Vec<String> {
     items::list(ws, Category::Archive, None)
-        .map(|items| items.into_iter().map(|item| item.name).collect())
+        .map(|items| {
+            items
+                .into_iter()
+                .map(|item| match item.origin {
+                    Some(origin) => format!("{}/{}", origin.archive_origin_name(), item.name),
+                    None => item.name,
+                })
+                .collect()
+        })
         .unwrap_or_else(|_| Vec::new())
 }
 
@@ -1621,6 +1714,78 @@ mod tests {
     }
 
     #[test]
+    fn run_list_json_renders_name_title_updated_and_path() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        let path = items::create(
+            &ws,
+            Category::Project,
+            "website-redesign",
+            "# Website Redesign\n",
+        )
+        .unwrap();
+        backdate(&path, 2);
+
+        let output = run_list_json(&ws, Category::Project, None).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(value[0]["name"], "website-redesign");
+        assert_eq!(value[0]["title"], "Website Redesign");
+        assert_eq!(value[0]["updated_days_ago"], 2);
+        assert_eq!(value[0]["path"], path.display().to_string());
+    }
+
+    #[test]
+    fn run_list_json_archive_row_has_separate_origin_no_qualified_name() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        let project_index = dir.path().join("4-Archive/Projects/old-project/index.md");
+        fs::create_dir_all(project_index.parent().unwrap()).unwrap();
+        fs::write(&project_index, "# Old Project\n").unwrap();
+
+        let output = run_list_json(&ws, Category::Archive, None).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(value[0]["name"], "old-project");
+        assert_eq!(value[0]["origin"], "project");
+    }
+
+    #[test]
+    fn run_list_json_non_archive_row_has_no_origin_key() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Project, "website-redesign", "").unwrap();
+
+        let output = run_list_json(&ws, Category::Project, None).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert!(value[0].as_object().unwrap().get("origin").is_none());
+    }
+
+    #[test]
+    fn run_list_json_empty_category_prints_empty_array() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        let output = run_list_json(&ws, Category::Resource, None).unwrap();
+
+        assert_eq!(output, "[]");
+    }
+
+    #[test]
+    fn run_list_json_filter_matching_nothing_prints_empty_array() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Project, "website-redesign", "").unwrap();
+
+        let output = run_list_json(&ws, Category::Project, Some("nonexistent")).unwrap();
+
+        assert_eq!(output, "[]");
+    }
+
+    #[test]
     fn run_list_renders_empty_message_when_category_has_no_items_and_no_filter() {
         let dir = tempdir().unwrap();
         let ws = workspace(dir.path());
@@ -1744,6 +1909,77 @@ mod tests {
             assert!(line.ends_with('0'));
             assert!(!line.contains("- "));
         }
+    }
+
+    #[test]
+    fn run_status_json_emits_all_five_counts_under_lowercase_keys() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        items::create(&ws, Category::Inbox, "a", "").unwrap();
+        items::create(&ws, Category::Project, "p1", "").unwrap();
+        items::create(&ws, Category::Area, "a1", "").unwrap();
+        items::create(&ws, Category::Resource, "r1", "").unwrap();
+
+        let output = run_status_json(&ws).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(value["inbox"], 1);
+        assert_eq!(value["project"].as_array().unwrap().len(), 1);
+        assert_eq!(value["area"].as_array().unwrap().len(), 1);
+        assert_eq!(value["resource"], 1);
+        assert_eq!(value["archive"], 0);
+    }
+
+    #[test]
+    fn run_status_json_project_entry_includes_name_title_updated_and_reviewed() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        let path = items::create(
+            &ws,
+            Category::Project,
+            "website-redesign",
+            "---\nlast_reviewed: 2020-01-01\n---\n# Website Redesign\n",
+        )
+        .unwrap();
+        backdate(&path, 2);
+
+        let output = run_status_json(&ws).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        let entry = &value["project"][0];
+        assert_eq!(entry["name"], "website-redesign");
+        assert_eq!(entry["title"], "Website Redesign");
+        assert_eq!(entry["updated_days_ago"], 2);
+        assert!(entry["reviewed_days_ago"].is_number());
+    }
+
+    #[test]
+    fn run_status_json_never_reviewed_entry_omits_reviewed_field() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        items::create(&ws, Category::Project, "my-project", "# My Project\n").unwrap();
+
+        let output = run_status_json(&ws).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        let entry = value["project"][0].as_object().unwrap();
+        assert!(!entry.contains_key("reviewed_days_ago"));
+    }
+
+    #[test]
+    fn run_status_json_inbox_resource_archive_are_plain_numbers() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+
+        let output = run_status_json(&ws).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert!(value["inbox"].is_number());
+        assert!(value["resource"].is_number());
+        assert!(value["archive"].is_number());
     }
 
     #[test]

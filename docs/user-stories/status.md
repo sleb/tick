@@ -146,6 +146,41 @@ Projects and areas are each sorted alphabetically by Name, matching `list`.
 
 ---
 
+## User Story 005 ✅
+
+- **Summary:** `--json` prints category counts and per-item project/area rows as structured data
+- **Depends on:** Story 001 (category counts), Story 002 (per-item rows), Story 003 (reviewed fact)
+
+### Use Case
+
+- **As an** agent driving Ishi on a user's behalf
+- **I want to** run `ishi status --json` and get counts and per-item facts as typed data
+- **so that** I can decide what to act on next (e.g. what to pass to `ishi review <item> --keep`) without regexing a human-formatted summary
+
+### Acceptance Criteria
+
+- **Scenario:** Counts are emitted for all five categories
+- **Given:** I am inside an initialized PARA system with 2 inbox items, 3 projects, 2 areas, 5 resources, and 12 archived items
+- **When:** I run `ishi status --json`
+- **Then:** Ishi prints a JSON object with a count for each of `inbox`, `projects`, `areas`, `resources`, `archive`
+
+- **Scenario:** Project/area entries include name, title, updated age, and reviewed age
+- **Given:** I am inside an initialized PARA system with a project `website-redesign` (`index.md` heading `# Website Redesign`, last modified 2 days ago, `last_reviewed` set to 3 days ago)
+- **When:** I run `ishi status --json`
+- **Then:** the `projects` entry for `website-redesign` includes `name`, `title`, `updated_days_ago: 2`, and `reviewed_days_ago: 3`
+
+- **Scenario:** An item never reviewed reports a null/absent reviewed field, not a sentinel string
+- **Given:** I am inside an initialized PARA system with a project `my-project` created by `ishi new --project` and never passed through `ishi review`
+- **When:** I run `ishi status --json`
+- **Then:** the `my-project` entry's reviewed field is `null` (or the key is absent) rather than the human-readable string `"never"`, so an agent can branch on it without string-matching
+
+- **Scenario:** Inbox, Resources, and Archive stay counts-only in `--json` too
+- **Given:** I am inside an initialized PARA system with 2 inbox items and 5 resources
+- **When:** I run `ishi status --json`
+- **Then:** the `inbox` and `resources` fields are plain counts (numbers), with no per-item array — matching the human-readable output's scope, just as structured data
+
+---
+
 ## User Story 004
 
 - **Summary:** `ishi review`'s `[k]eep` action stamps `last_reviewed`; `[a]rchive` and `[s]kip` don't

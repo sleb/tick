@@ -193,3 +193,39 @@
 - **Given:** I have a `.ishi.toml` created before this feature existed, with no `#:schema` comment
 - **When:** I run `ishi config edit`
 - **Then:** Ishi opens the file as-is, without inserting a `#:schema` comment or otherwise modifying the file's contents
+
+---
+
+## User Story 007 ✅
+
+- **Summary:** `--json` prints the effective config with each key's provenance as a structured field
+- **Depends on:** Story 001 (the provenance this restates as data), Story 002 (the layering it reflects)
+
+### Use Case
+
+- **As an** agent driving Ishi on a user's behalf
+- **I want to** run `ishi config --json` and get the effective config plus, per key, which layer it came from
+- **so that** I can answer "is `archive` renamed locally?" (or any other key) programmatically, instead of parsing inline TOML comments meant for a human skimming the file
+
+### Acceptance Criteria
+
+- **Scenario:** No config files are present
+- **Given:** I am inside a PARA system with no `./.ishi.toml` and no `~/.ishi.toml`
+- **When:** I run `ishi config --json`
+- **Then:** Ishi prints a JSON object with the full effective config (`folders`, `defaults`, `templates`) and, for every key, a provenance value of `default`
+
+- **Scenario:** A local override is reported with its source
+- **Given:** `./.ishi.toml` overrides only `folders.inbox`, and there is no `~/.ishi.toml`
+- **When:** I run `ishi config --json`
+- **Then:** the JSON output's `folders.inbox` entry has provenance `local`, and every other key has provenance `default`
+
+- **Scenario:** A key overridden at both levels reports the local source, matching precedence
+- **Given:** `~/.ishi.toml` and `./.ishi.toml` both set `templates.daily` to different values
+- **When:** I run `ishi config --json`
+- **Then:** the JSON output's `templates.daily` entry has the local config's value and provenance `local`
+- **and Then:** this matches the same precedence `ishi config` (human-readable) and Story 002's resolution rules already apply — `--json` is a different encoding of the same resolution, not a different rule
+
+- **Scenario:** A user-level-only override reports its source
+- **Given:** `~/.ishi.toml` sets `templates.note`, and there is no `./.ishi.toml`
+- **When:** I run `ishi config --json`
+- **Then:** the JSON output's `templates.note` entry has provenance `user`

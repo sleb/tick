@@ -71,6 +71,11 @@ pub struct ListedItem {
     pub name: String,
     pub title: String,
     pub updated_days_ago: u64,
+    pub path: PathBuf,
+    /// `Some(origin)` for `Category::Archive` rows, giving the category the
+    /// item was archived from; `None` otherwise. Replaces the old
+    /// `"Origin/name"`-qualified `name` convention.
+    pub origin: Option<Category>,
 }
 
 /// Thin wrapper over `gist::parser::first_heading_text`: skips a leading
@@ -148,6 +153,7 @@ fn scan_dir(
 fn build_listed_item(
     name: String,
     source_path: &std::path::Path,
+    origin: Option<Category>,
     now: SystemTime,
 ) -> Result<ListedItem, ItemsError> {
     let content = fs::read_to_string(source_path)?;
@@ -159,6 +165,8 @@ fn build_listed_item(
         name,
         title,
         updated_days_ago,
+        path: source_path.to_path_buf(),
+        origin,
     })
 }
 
@@ -190,8 +198,7 @@ fn list_at(
             for (name, source_path) in
                 scan_dir(&origin_dir, origin.is_directory_style(), extension)?
             {
-                let qualified = format!("{}/{name}", origin.archive_origin_name());
-                let item = build_listed_item(qualified, &source_path, now)?;
+                let item = build_listed_item(name, &source_path, Some(origin), now)?;
                 if matches_filter(&item, filter) {
                     items.push(item);
                 }
@@ -202,14 +209,18 @@ fn list_at(
         for (name, source_path) in
             scan_dir(&category_dir, category.is_directory_style(), extension)?
         {
-            let item = build_listed_item(name, &source_path, now)?;
+            let item = build_listed_item(name, &source_path, None, now)?;
             if matches_filter(&item, filter) {
                 items.push(item);
             }
         }
     }
 
-    items.sort_by(|a, b| a.name.cmp(&b.name));
+    items.sort_by(|a, b| {
+        let a_key = a.origin.map(|o| o.archive_origin_name());
+        let b_key = b.origin.map(|o| o.archive_origin_name());
+        (a_key, &a.name).cmp(&(b_key, &b.name))
+    });
     Ok(items)
 }
 
@@ -825,6 +836,25 @@ mod tests {
     }
 
     #[test]
+    fn list_at_directory_style_category_path_resolves_to_index_md() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let now = fixed_now();
+
+        create(
+            &ws,
+            Category::Project,
+            "website-redesign",
+            "# Website Redesign\n",
+        )
+        .unwrap();
+
+        let items = list_at(&ws, Category::Project, None, now).unwrap();
+
+        assert!(items[0].path.ends_with("website-redesign/index.md"));
+    }
+
+    #[test]
     fn list_at_flat_category_uses_file_stem_as_name() {
         let dir = tempdir().unwrap();
         let ws = workspace(dir.path());
@@ -839,6 +869,7 @@ mod tests {
         assert_eq!(items[0].name, "api-notes");
         assert_eq!(items[0].title, "API Design Notes");
         assert_eq!(items[0].updated_days_ago, 5);
+        assert_eq!(items[0].path, path);
     }
 
     #[test]
@@ -885,10 +916,12 @@ mod tests {
         let items = list_at(&ws, Category::Archive, None, now).unwrap();
 
         assert_eq!(items.len(), 2);
-        assert_eq!(items[0].name, "Projects/old-project");
+        assert_eq!(items[0].name, "old-project");
+        assert_eq!(items[0].origin, Some(Category::Project));
         assert_eq!(items[0].title, "Old Project");
         assert_eq!(items[0].updated_days_ago, 120);
-        assert_eq!(items[1].name, "Resources/api-notes-v1");
+        assert_eq!(items[1].name, "api-notes-v1");
+        assert_eq!(items[1].origin, Some(Category::Resource));
         assert_eq!(items[1].title, "API Notes v1");
         assert_eq!(items[1].updated_days_ago, 180);
     }
@@ -917,7 +950,8 @@ mod tests {
         let items = list_at(&ws, Category::Archive, None, now).unwrap();
 
         assert_eq!(items.len(), 1);
-        assert_eq!(items[0].name, "Projects/old-project");
+        assert_eq!(items[0].name, "old-project");
+        assert_eq!(items[0].origin, Some(Category::Project));
     }
 
     #[test]

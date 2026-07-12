@@ -56,7 +56,11 @@ see "Filing vocabulary vs. creation vocabulary" below for why.
   origin category it's preserving. Each non-`Archive` category also has a
   fixed archive-origin subfolder name (e.g. `Project` -> `"Projects"`) used
   when filing into `Archive`, separate from the user-configurable top-level
-  folder names in `config`.
+  folder names in `config`. Also has a singular lowercase `key()` (`inbox`,
+  `project`, `area`, `resource`, `archive`) distinct from both
+  `archive_origin_name` and `display_name` — used by `--json` output so
+  agent consumers can branch on a fixed machine-readable value instead of
+  parsing a display string.
 - **`Kind`** — *what `new`/`daily` create*: `Inbox`, `Project`, `Area`,
   `Resource`, `Daily`. Used only by the creation path (`cli::run_new`'s
   dispatch, template selection). Each `Kind` maps to the `Category` it files
@@ -101,7 +105,12 @@ Responsibilities:
 - Resolve effective config from the three layers (`Config::resolve`).
 - Know the built-in defaults (folder names, default extension, templates).
 - Render config as TOML, both a fresh scaffold (`init`) and an
-  origin-annotated view of the resolved config (`ishi config`).
+  origin-annotated view of the resolved config (`ishi config`), plus a JSON
+  rendering of the same effective-config-plus-provenance data
+  (`render_effective_json`, `ishi config --json`) — provenance there uses
+  `Source::json_value()`, a coarser three-way version of `Source::comment()`
+  that collapses `LocalOverridesUser` into `"local"` (an agent only needs
+  "which layer won," not the human-readable aside about what it overrode).
 - Own `.ishi.toml`'s JSON Schema and write it alongside a new config file
   so editors get autocomplete/validation.
 - Render a template string, substituting `{{date}}`, `{{title}}`, `{{time}}`,
@@ -171,10 +180,19 @@ structured results — no printing, no prompting.
   origin category as an `Archive` subfolder when archiving. Moving *out of*
   `Archive` follows the same wrap/relocate rules keyed off the destination
   category, not the origin the item was archived under.
-- **List**: per-category listing, alphabetical by name, with an optional
-  case-insensitive substring filter against name or title. Each row's title
-  is inferred from the item's first Markdown heading (via `gist`), falling
-  back to the item's name.
+- **List**: per-category listing, sorted alphabetically (`Archive` rows sort
+  by origin-then-name, matching the qualified display order), with an
+  optional case-insensitive substring filter against name or title. Each row
+  (`ListedItem`) carries `name`, `title`, `updated_days_ago`, the resolved
+  `path` to the item's content file (the exact file `review`/`move` operate
+  on — `index.md` for directory-style categories, the flat file itself
+  otherwise), and, for `Archive` rows only, `origin: Option<Category>` — the
+  category the item was archived from. `name` is unqualified for every
+  category, including `Archive`; `cli::run_list`'s text renderer reconstructs
+  the qualified `Origin/name` display string from `name` + `origin` at
+  render time, while `cli::run_list_json` emits them as separate JSON
+  fields. Title is inferred from the item's first Markdown heading (via
+  `gist`), falling back to the item's name.
 - **Status**: per-category counts, plus per-item facts (`Project`/`Area`
   only) — title, days since last modified, days since last reviewed (from
   the `index.md` frontmatter's `last_reviewed` field, or absent if never
@@ -234,8 +252,19 @@ argv-to-call-to-print shim and everything else is unit-testable. Notably:
   and stamps it on the item before the move; moving to any other category
   is unprompted.
 - Bare `ishi config` (no subcommand) resolves and renders the effective config
-  directly, bypassing `cli`, since `config::resolve`/`render_effective` are
-  already infallible/pure enough not to need a `cli` wrapper.
+  directly, bypassing `cli`, since `config::resolve`/`render_effective`(`_json`)
+  are already infallible/pure enough not to need a `cli` wrapper.
+- `run_list_json`/`run_status_json` are `--json` counterparts to
+  `run_list`/`run_status`, not replacements — `main` picks one or the other
+  per-invocation based on a `--json` flag. Each defines its own private
+  `#[derive(serde::Serialize)]` row/report structs in `cli` rather than
+  deriving `Serialize` on `items`' structs directly, keeping `items` free of
+  a JSON-shape opinion (it returns facts; `cli` decides how to encode them
+  for a human or a machine). An empty result renders `[]` in
+  `run_list_json`, never the human-readable empty/no-match message; a
+  present-but-`None` optional field (`ListRowJson::origin`,
+  `StatusItemJson::reviewed_days_ago`) is omitted from the JSON object
+  rather than emitted as `null`.
 - `cli` owns the pure item-name-set logic backing tab-completion
   (`live_item_names`/`archived_item_names`), both thin wrappers over
   `items::list` — `main`'s completer functions call these and filter to the

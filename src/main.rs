@@ -47,17 +47,27 @@ Examples:
     Config {
         #[command(subcommand)]
         action: Option<ConfigAction>,
+        /// Print the effective config as JSON instead of annotated TOML.
+        #[arg(long)]
+        json: bool,
     },
     /// List items in a category.
     #[command(alias = "ls")]
     List {
         category: ListCategory,
         filter: Option<String>,
+        /// Print results as a JSON array instead of a table.
+        #[arg(long)]
+        json: bool,
     },
     /// Print a shell completion script for `ishi` to stdout.
     Completions { shell: CompletionShell },
     /// Print a per-category summary of the PARA system.
-    Status,
+    Status {
+        /// Print the report as a JSON object instead of text.
+        #[arg(long)]
+        json: bool,
+    },
     /// Relocate an item to a different category.
     #[command(
         alias = "mv",
@@ -338,7 +348,14 @@ fn main() -> anyhow::Result<()> {
             println!("Next: ishi list to see it, or ishi status for an overview.");
         }
         Commands::Config {
+            action: Some(_),
+            json: true,
+        } => {
+            anyhow::bail!("--json cannot be combined with a config subcommand");
+        }
+        Commands::Config {
             action: Some(ConfigAction::Init { global }),
+            json: false,
         } => {
             let (path, display) = config_target(&cwd, global)?;
             let message = cli::run_config_init(&path, &display)?;
@@ -346,6 +363,7 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Config {
             action: Some(ConfigAction::Edit { global }),
+            json: false,
         } => {
             let (path, display) = config_target(&cwd, global)?;
             if !path.exists() {
@@ -355,24 +373,40 @@ fn main() -> anyhow::Result<()> {
             let editor = RealEditor;
             cli::run_config_edit(&path, &editor)?;
         }
-        Commands::Config { action: None } => {
+        Commands::Config { action: None, json } => {
             let (path, _display) = config_target(&cwd, false)?;
             let (config, origins) = ishi::config::Config::resolve(&path, home_config.as_deref())?;
-            print!("{}", ishi::config::render_effective(&config, &origins));
+            if json {
+                print!("{}", ishi::config::render_effective_json(&config, &origins));
+            } else {
+                print!("{}", ishi::config::render_effective(&config, &origins));
+            }
         }
-        Commands::List { category, filter } => {
+        Commands::List {
+            category,
+            filter,
+            json,
+        } => {
             let ws = Workspace::discover(&cwd, home_config.as_deref())
                 .context("failed to find a PARA workspace")?;
-            let output = cli::run_list(&ws, category.into(), filter.as_deref())?;
+            let output = if json {
+                cli::run_list_json(&ws, category.into(), filter.as_deref())?
+            } else {
+                cli::run_list(&ws, category.into(), filter.as_deref())?
+            };
             println!("{output}");
         }
         Commands::Completions { shell } => {
             io::stdout().write_all(&render_completions(shell))?;
         }
-        Commands::Status => {
+        Commands::Status { json } => {
             let ws = Workspace::discover(&cwd, home_config.as_deref())
                 .context("failed to find a PARA workspace")?;
-            let output = cli::run_status(&ws)?;
+            let output = if json {
+                cli::run_status_json(&ws)?
+            } else {
+                cli::run_status(&ws)?
+            };
             println!("{output}");
         }
         Commands::Move { name, target, yes } => {
@@ -553,7 +587,7 @@ mod tests {
     fn parses_status() {
         let cli = Cli::parse_from(["ishi", "status"]);
 
-        assert_eq!(cli.command, Commands::Status);
+        assert_eq!(cli.command, Commands::Status { json: false });
     }
 
     #[test]
@@ -731,7 +765,8 @@ mod tests {
         assert_eq!(
             cli.command,
             Commands::Config {
-                action: Some(ConfigAction::Init { global: false })
+                action: Some(ConfigAction::Init { global: false }),
+                json: false,
             }
         );
     }
@@ -743,7 +778,8 @@ mod tests {
         assert_eq!(
             cli.command,
             Commands::Config {
-                action: Some(ConfigAction::Init { global: true })
+                action: Some(ConfigAction::Init { global: true }),
+                json: false,
             }
         );
     }
@@ -755,7 +791,8 @@ mod tests {
         assert_eq!(
             cli.command,
             Commands::Config {
-                action: Some(ConfigAction::Init { global: true })
+                action: Some(ConfigAction::Init { global: true }),
+                json: false,
             }
         );
     }
@@ -767,7 +804,8 @@ mod tests {
         assert_eq!(
             cli.command,
             Commands::Config {
-                action: Some(ConfigAction::Edit { global: false })
+                action: Some(ConfigAction::Edit { global: false }),
+                json: false,
             }
         );
     }
@@ -779,7 +817,8 @@ mod tests {
         assert_eq!(
             cli.command,
             Commands::Config {
-                action: Some(ConfigAction::Edit { global: true })
+                action: Some(ConfigAction::Edit { global: true }),
+                json: false,
             }
         );
     }
@@ -791,7 +830,8 @@ mod tests {
         assert_eq!(
             cli.command,
             Commands::Config {
-                action: Some(ConfigAction::Edit { global: true })
+                action: Some(ConfigAction::Edit { global: true }),
+                json: false,
             }
         );
     }
@@ -800,7 +840,26 @@ mod tests {
     fn parses_config_bare_as_action_none() {
         let cli = Cli::parse_from(["ishi", "config"]);
 
-        assert_eq!(cli.command, Commands::Config { action: None });
+        assert_eq!(
+            cli.command,
+            Commands::Config {
+                action: None,
+                json: false,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_config_json_flag() {
+        let cli = Cli::parse_from(["ishi", "config", "--json"]);
+
+        assert_eq!(
+            cli.command,
+            Commands::Config {
+                action: None,
+                json: true,
+            }
+        );
     }
 
     #[test]
@@ -811,7 +870,8 @@ mod tests {
             cli.command,
             Commands::List {
                 category: ListCategory::Project,
-                filter: None
+                filter: None,
+                json: false,
             }
         );
     }
@@ -824,7 +884,8 @@ mod tests {
             cli.command,
             Commands::List {
                 category: ListCategory::Project,
-                filter: Some("web".into())
+                filter: Some("web".into()),
+                json: false,
             }
         );
     }
@@ -837,7 +898,8 @@ mod tests {
             cli.command,
             Commands::List {
                 category: ListCategory::Area,
-                filter: None
+                filter: None,
+                json: false,
             }
         );
     }
@@ -850,7 +912,8 @@ mod tests {
             cli.command,
             Commands::List {
                 category: ListCategory::Resource,
-                filter: None
+                filter: None,
+                json: false,
             }
         );
     }
@@ -863,7 +926,8 @@ mod tests {
             cli.command,
             Commands::List {
                 category: ListCategory::Inbox,
-                filter: None
+                filter: None,
+                json: false,
             }
         );
     }
@@ -876,9 +940,31 @@ mod tests {
             cli.command,
             Commands::List {
                 category: ListCategory::Archive,
-                filter: None
+                filter: None,
+                json: false,
             }
         );
+    }
+
+    #[test]
+    fn parses_list_json_flag() {
+        let cli = Cli::parse_from(["ishi", "list", "project", "--json"]);
+
+        assert_eq!(
+            cli.command,
+            Commands::List {
+                category: ListCategory::Project,
+                filter: None,
+                json: true,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_status_json_flag() {
+        let cli = Cli::parse_from(["ishi", "status", "--json"]);
+
+        assert_eq!(cli.command, Commands::Status { json: true });
     }
 
     #[test]

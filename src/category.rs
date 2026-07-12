@@ -54,6 +54,21 @@ impl Category {
             Category::Archive => "Archive",
         }
     }
+
+    /// Singular lowercase name for machine-readable output (`list
+    /// --json`'s `origin` field). Distinct from `archive_origin_name`
+    /// (plural, capitalized, filesystem-facing) and `display_name`
+    /// (plural, capitalized, human-facing) — this one is for JSON
+    /// consumers to branch on without parsing a display string.
+    pub fn key(&self) -> &'static str {
+        match self {
+            Category::Inbox => "inbox",
+            Category::Project => "project",
+            Category::Area => "area",
+            Category::Resource => "resource",
+            Category::Archive => "archive",
+        }
+    }
 }
 
 /// What `ishi new`/`ishi daily` create — a different vocabulary from
@@ -126,6 +141,15 @@ mod tests {
         assert_eq!(Category::Area.display_name(), "Areas");
         assert_eq!(Category::Resource.display_name(), "Resources");
         assert_eq!(Category::Archive.display_name(), "Archive");
+    }
+
+    #[test]
+    fn key_returns_singular_lowercase_names_for_all_five_variants() {
+        assert_eq!(Category::Inbox.key(), "inbox");
+        assert_eq!(Category::Project.key(), "project");
+        assert_eq!(Category::Area.key(), "area");
+        assert_eq!(Category::Resource.key(), "resource");
+        assert_eq!(Category::Archive.key(), "archive");
     }
 
     #[test]

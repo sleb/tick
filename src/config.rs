@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,6 +121,19 @@ impl Source {
             Source::User => "user",
             Source::Local => "local",
             Source::LocalOverridesUser => "local, overrides user",
+        }
+    }
+
+    /// Coarser than `comment()`: collapses `LocalOverridesUser` into
+    /// `"local"` for `config --json`'s provenance field, since an agent
+    /// branching on provenance only needs "which layer won," not the
+    /// human-readable aside about what it overrode (config.md 007,
+    /// scenario 3).
+    pub fn json_value(self) -> &'static str {
+        match self {
+            Source::Default => "default",
+            Source::User => "user",
+            Source::Local | Source::LocalOverridesUser => "local",
         }
     }
 }
@@ -461,6 +474,103 @@ resource = """
         origins.templates.resource.comment(),
         templates.resource,
     )
+}
+
+#[derive(Serialize)]
+struct FieldJson<'a, T: Serialize> {
+    value: T,
+    source: &'a str,
+}
+
+#[derive(Serialize)]
+struct FoldersJson<'a> {
+    inbox: FieldJson<'a, &'a str>,
+    projects: FieldJson<'a, &'a str>,
+    areas: FieldJson<'a, &'a str>,
+    resources: FieldJson<'a, &'a str>,
+    archive: FieldJson<'a, &'a str>,
+}
+
+#[derive(Serialize)]
+struct DefaultsJson<'a> {
+    extension: FieldJson<'a, &'a str>,
+}
+
+#[derive(Serialize)]
+struct TemplatesJson<'a> {
+    note: FieldJson<'a, &'a str>,
+    daily: FieldJson<'a, &'a str>,
+    project: FieldJson<'a, &'a str>,
+    area: FieldJson<'a, &'a str>,
+    resource: FieldJson<'a, &'a str>,
+}
+
+#[derive(Serialize)]
+struct ConfigJson<'a> {
+    folders: FoldersJson<'a>,
+    defaults: DefaultsJson<'a>,
+    templates: TemplatesJson<'a>,
+}
+
+/// Field-for-field mirror of `render_effective`'s output, JSON-encoded —
+/// `config --json` (config.md 007). Lives beside `render_effective` (not
+/// in `cli`) for the same reason bare `ishi config` already bypasses
+/// `cli` — `Config`/`ConfigOrigins` are already fully resolved and
+/// infallible to render, no `cli` wrapper needed.
+pub fn render_effective_json(config: &Config, origins: &ConfigOrigins) -> String {
+    let json = ConfigJson {
+        folders: FoldersJson {
+            inbox: FieldJson {
+                value: &config.category_dirs[0],
+                source: origins.category_dirs[0].json_value(),
+            },
+            projects: FieldJson {
+                value: &config.category_dirs[1],
+                source: origins.category_dirs[1].json_value(),
+            },
+            areas: FieldJson {
+                value: &config.category_dirs[2],
+                source: origins.category_dirs[2].json_value(),
+            },
+            resources: FieldJson {
+                value: &config.category_dirs[3],
+                source: origins.category_dirs[3].json_value(),
+            },
+            archive: FieldJson {
+                value: &config.category_dirs[4],
+                source: origins.category_dirs[4].json_value(),
+            },
+        },
+        defaults: DefaultsJson {
+            extension: FieldJson {
+                value: &config.default_extension,
+                source: origins.default_extension.json_value(),
+            },
+        },
+        templates: TemplatesJson {
+            note: FieldJson {
+                value: &config.templates.note,
+                source: origins.templates.note.json_value(),
+            },
+            daily: FieldJson {
+                value: &config.templates.daily,
+                source: origins.templates.daily.json_value(),
+            },
+            project: FieldJson {
+                value: &config.templates.project,
+                source: origins.templates.project.json_value(),
+            },
+            area: FieldJson {
+                value: &config.templates.area,
+                source: origins.templates.area.json_value(),
+            },
+            resource: FieldJson {
+                value: &config.templates.resource,
+                source: origins.templates.resource.json_value(),
+            },
+        },
+    };
+    serde_json::to_string_pretty(&json).expect("ConfigJson is always representable as JSON")
 }
 
 #[cfg(test)]
@@ -1024,5 +1134,113 @@ mod tests {
         assert!(matches!(err, ConfigError::AlreadyExists { .. }));
         assert_eq!(fs::read_to_string(&path).unwrap(), "custom content");
         assert!(!dir.path().join(".ishi.schema.json").exists());
+    }
+
+    #[test]
+    fn json_value_collapses_local_overrides_user_to_local() {
+        assert_eq!(Source::Default.json_value(), "default");
+        assert_eq!(Source::User.json_value(), "user");
+        assert_eq!(Source::Local.json_value(), "local");
+        assert_eq!(Source::LocalOverridesUser.json_value(), "local");
+    }
+
+    #[test]
+    fn render_effective_json_reports_default_when_no_config_files_exist() {
+        let dir = tempdir().unwrap();
+        let local_path = dir.path().join(".ishi.toml");
+
+        let (config, origins) = Config::resolve(&local_path, None).unwrap();
+        let rendered = render_effective_json(&config, &origins);
+        let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+
+        for source in [
+            value["folders"]["inbox"]["source"].as_str().unwrap(),
+            value["folders"]["projects"]["source"].as_str().unwrap(),
+            value["folders"]["areas"]["source"].as_str().unwrap(),
+            value["folders"]["resources"]["source"].as_str().unwrap(),
+            value["folders"]["archive"]["source"].as_str().unwrap(),
+            value["defaults"]["extension"]["source"].as_str().unwrap(),
+            value["templates"]["note"]["source"].as_str().unwrap(),
+            value["templates"]["daily"]["source"].as_str().unwrap(),
+            value["templates"]["project"]["source"].as_str().unwrap(),
+            value["templates"]["area"]["source"].as_str().unwrap(),
+            value["templates"]["resource"]["source"].as_str().unwrap(),
+        ] {
+            assert_eq!(source, "default");
+        }
+    }
+
+    #[test]
+    fn render_effective_json_reports_local_for_a_local_only_override() {
+        let dir = tempdir().unwrap();
+        let local_path = dir.path().join(".ishi.toml");
+        fs::write(
+            &local_path,
+            r#"
+            [folders]
+            inbox = "Inbox"
+            "#,
+        )
+        .unwrap();
+
+        let (config, origins) = Config::resolve(&local_path, None).unwrap();
+        let rendered = render_effective_json(&config, &origins);
+        let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+
+        assert_eq!(value["folders"]["inbox"]["source"], "local");
+        assert_eq!(value["folders"]["inbox"]["value"], "Inbox");
+        assert_eq!(value["folders"]["projects"]["source"], "default");
+    }
+
+    #[test]
+    fn render_effective_json_reports_local_for_local_overrides_user() {
+        let dir = tempdir().unwrap();
+        let local_path = dir.path().join(".ishi.toml");
+        let home_path = dir.path().join("home.ishi.toml");
+        fs::write(
+            &local_path,
+            r#"
+            [templates]
+            daily = "local daily template"
+            "#,
+        )
+        .unwrap();
+        fs::write(
+            &home_path,
+            r#"
+            [templates]
+            daily = "user daily template"
+            "#,
+        )
+        .unwrap();
+
+        let (config, origins) = Config::resolve(&local_path, Some(&home_path)).unwrap();
+        let rendered = render_effective_json(&config, &origins);
+        let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+
+        assert_eq!(value["templates"]["daily"]["source"], "local");
+        assert_eq!(value["templates"]["daily"]["value"], "local daily template");
+    }
+
+    #[test]
+    fn render_effective_json_reports_user_for_a_user_only_override() {
+        let dir = tempdir().unwrap();
+        let local_path = dir.path().join(".ishi.toml");
+        let home_path = dir.path().join("home.ishi.toml");
+        fs::write(
+            &home_path,
+            r#"
+            [templates]
+            note = "user note template"
+            "#,
+        )
+        .unwrap();
+
+        let (config, origins) = Config::resolve(&local_path, Some(&home_path)).unwrap();
+        let rendered = render_effective_json(&config, &origins);
+        let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+
+        assert_eq!(value["templates"]["note"]["source"], "user");
+        assert_eq!(value["templates"]["note"]["value"], "user note template");
     }
 }

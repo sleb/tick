@@ -117,3 +117,54 @@ order, the per-item prompt, and what `[a]rchive` does to the filesystem.
 - **When:** I run `ishi review`, choose `[s]kip` for `my-project`
 - **Then:** `my-project` is still at `1-Projects/my-project`, unmoved and unmodified
 - **and Then:** the next prompt is for `website-redesign`
+
+---
+
+## User Story 004
+
+- **Summary:** Drive a single item's review decision with a flag instead of the interactive prompt
+- **Depends on:** Story 002 (`[a]rchive`'s move effect), Story 003 (`[k]eep`/`[s]kip`'s effects), [status.md](status.md) Story 004 (`last_reviewed` stamping)
+
+### Use Case
+
+- **As an** agent asked to run a weekly review on the user's behalf
+- **I want to** run `ishi review <item> --keep`, `ishi review <item> --archive`, or `ishi review <item> --skip` for one named project or area at a time
+- **so that** I can act on the user's review decisions without stdin, reusing Ishi's own move/stamp logic instead of hand-editing frontmatter and bypassing the command entirely
+
+### Acceptance Criteria
+
+- **Scenario:** `--keep` has the same effect as choosing `[k]eep` interactively
+- **Given:** I am inside an initialized PARA system with a project `website-redesign` whose `index.md` frontmatter has no `last_reviewed` field
+- **When:** I run `ishi review website-redesign --keep`
+- **Then:** `website-redesign`'s `index.md` frontmatter now has `last_reviewed` set to today's date, and the item is not moved
+- **and Then:** the command exits successfully and prints a one-line confirmation (e.g. `Kept website-redesign.`), not the interactive `[k]eep [a]rchive [s]kip?` prompt
+
+- **Scenario:** `--archive` has the same effect as choosing `[a]rchive` interactively
+- **Given:** I am inside an initialized PARA system with a project `website-redesign`
+- **When:** I run `ishi review website-redesign --archive`
+- **Then:** `website-redesign` is moved from `1-Projects/website-redesign` to `4-Archive/Projects/website-redesign`, exactly as `ishi move website-redesign archive` would, and its `last_reviewed` field is left untouched (adding one is not treated as a review, matching Story 002)
+
+- **Scenario:** `--skip` has the same effect as choosing `[s]kip` interactively
+- **Given:** I am inside an initialized PARA system with a project `website-redesign` whose `index.md` frontmatter has `last_reviewed` set to 10 days ago
+- **When:** I run `ishi review website-redesign --skip`
+- **Then:** `website-redesign` is not moved and its `last_reviewed` value is unchanged
+
+- **Scenario:** An area name works the same way as a project name
+- **Given:** I am inside an initialized PARA system with an area `finances`
+- **When:** I run `ishi review finances --keep`
+- **Then:** `finances`'s `index.md` frontmatter `last_reviewed` is set to today's date, the same as a project's `--keep`
+
+- **Scenario:** Naming an item that isn't a project or area is a distinct, scriptable error
+- **Given:** I am inside an initialized PARA system with a resource `api-notes` but no project or area named `api-notes`
+- **When:** I run `ishi review api-notes --keep`
+- **Then:** Ishi exits with an error explaining that `api-notes` isn't a project or area (not silently doing nothing), so an agent can detect the mistake from the exit rather than assuming it succeeded
+
+- **Scenario:** Passing more than one of `--keep`/`--archive`/`--skip` is rejected before anything is touched
+- **Given:** I am inside an initialized PARA system with a project `website-redesign`
+- **When:** I run `ishi review website-redesign --keep --archive`
+- **Then:** Ishi exits with an error that the flags are mutually exclusive, and `website-redesign` is not moved or modified
+
+- **Scenario:** Naming an item without any decision flag still falls back to the interactive prompt
+- **Given:** I am inside an initialized PARA system with a project `website-redesign`
+- **When:** I run `ishi review website-redesign` with no `--keep`/`--archive`/`--skip` flag
+- **Then:** Ishi prompts interactively for just that one item, the same `[k]eep [a]rchive [s]kip?` prompt Story 001 describes, rather than erroring or silently doing nothing

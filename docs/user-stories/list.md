@@ -180,3 +180,44 @@ unlike sorting by Updated.
 - **Given:** I am inside an initialized PARA system with an inbox file `quick-thought.md` containing a YAML frontmatter block followed by plain text with no heading
 - **When:** I run `ishi list inbox`
 - **Then:** Ishi prints a row with `quick-thought` in both the Name and Title columns — the frontmatter block itself is never mistaken for a heading
+
+---
+
+## User Story 006 ✅
+
+- **Summary:** `--json` prints the same rows as structured data, including each item's resolved file path
+- **Depends on:** Story 001 (base columns), Story 002 (archive origin category), Story 003 (filter), Story 004 (empty-result message)
+
+### Use Case
+
+- **As an** agent driving Ishi on a user's behalf
+- **I want to** run `ishi list <category> --json` and get an array of typed rows instead of an aligned text table
+- **so that** I can parse the result reliably (no column-width assumptions) and get straight to the file I need to `Read`/`Edit`, instead of guessing its path or reimplementing Ishi's item-resolution logic myself
+
+### Acceptance Criteria
+
+- **Scenario:** JSON rows include name, title, updated age, and resolved path
+- **Given:** I am inside an initialized PARA system with a project `website-redesign` (`index.md` heading `# Website Redesign`, last modified 2 days ago)
+- **When:** I run `ishi list project --json`
+- **Then:** Ishi prints a JSON array with one object for `website-redesign`, containing at least `name`, `title`, `updated_days_ago`, and `path` fields
+- **and Then:** `path` is the path to `website-redesign`'s `index.md`, the same file `ishi review`/`ishi move` would operate on
+
+- **Scenario:** Resource/inbox rows resolve to the flat file itself
+- **Given:** I am inside an initialized PARA system with a resource file `api-notes.md` (heading `# API Design Notes`, last modified 5 days ago)
+- **When:** I run `ishi list resource --json`
+- **Then:** the row's `path` field is the path to `api-notes.md` directly, not a directory
+
+- **Scenario:** Archive rows carry origin category as a structured field, not a concatenated string
+- **Given:** I am inside an initialized PARA system with an archived project at `4-Archive/Projects/old-project`
+- **When:** I run `ishi list archive --json`
+- **Then:** the row for `old-project` includes an `origin` field with value `project` (or equivalent), separate from `name`, rather than folding it into a single `"Projects/old-project"` name string the way the human-readable table does
+
+- **Scenario:** An empty category with `--json` prints an empty array, not the human-readable message
+- **Given:** I am inside an initialized PARA system with no resources
+- **When:** I run `ishi list resource --json`
+- **Then:** Ishi prints `[]` and exits successfully — no `No items in Resources.` text, since that message exists for humans and an empty array is already an unambiguous signal for a script
+
+- **Scenario:** A filter with no matches behaves the same way in `--json` mode
+- **Given:** I am inside an initialized PARA system with a project `website-redesign`
+- **When:** I run `ishi list project nonexistent --json`
+- **Then:** Ishi prints `[]` and exits successfully, with no human-readable message mixed into the output

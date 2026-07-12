@@ -21,7 +21,10 @@
 
 ## Outstanding stories
 
-None currently.
+- [skill.md](user-stories/skill.md) — bundled, installable Claude Code Skill so an agent can drive `ishi` non-interactively to manage a PARA vault. No CLI changes; packaging and documentation only.
+- [agent-ergonomics-map.md](user-stories/agent-ergonomics-map.md) — story map for CLI-level agent ergonomics gaps (see `docs/agent-ergonomics.md`), sequencing the stories below:
+  - [review.md](user-stories/review.md) Story 004 — `ishi review <item> --keep|--archive|--skip`
+  - [exit-codes.md](user-stories/exit-codes.md) Story 001 — semantic exit codes for not-found/invalid-state/invalid-config
 
 Implementation notes for finished work (design rationale, which LLD each
 story shipped under) live in git history and in `docs/design.md`, not
