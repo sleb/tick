@@ -226,7 +226,19 @@ Orchestrates the weekly-review walk, built on `items` + `editor`'s prompting
 pattern. Iterates `Project` and `Area` items and asks a `Ui` to keep,
 archive, or skip each one: keep stamps `last_reviewed` via `items`; archive
 moves the item via `items::mv` (origin category preserved as usual) without
-touching `last_reviewed`; skip does neither.
+touching `last_reviewed`; skip does neither. A `Decision` enum
+(`Keep`/`Archive`/`Skip`) factors out what the walk's `[k]eep`/`[a]rchive`/
+`[s]kip` choices do into a single `apply_decision` function, so the effects
+are defined in exactly one place.
+
+`run_one` drives a single named `Project`/`Area` item's review decision
+without walking the rest: given a `Decision` (from `ishi review <item>
+--keep|--archive|--skip`), it applies it directly via `apply_decision` and
+returns a one-line confirmation with no `Ui` prompt; given none, it falls
+back to the same interactive `[k]eep [a]rchive [s]kip?` prompt the full walk
+uses, for just that one item. It resolves the item via `items::locate` and
+rejects anything that isn't a `Project` or `Area` — including no match at
+all — with `ReviewError::NotReviewable`.
 
 ### `cli`
 

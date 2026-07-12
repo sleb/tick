@@ -111,7 +111,48 @@ Examples:
         name: String,
     },
     /// Walk every project and area, prompting keep/archive/skip.
-    Review,
+    #[command(after_help = "\
+Examples:
+  ishi review                          Walk every project and area interactively
+  ishi review website-redesign --keep  Stamp last_reviewed for one item, no prompt
+  ishi review website-redesign         Prompt for just that one item")]
+    Review {
+        /// Name of the item to review, as shown by `ishi list`. Omit to
+        /// walk every project and area.
+        name: Option<String>,
+        #[command(flatten)]
+        decision: ReviewDecision,
+    },
+}
+
+/// The `--keep`/`--archive`/`--skip` flags for `ishi review <name>` — at
+/// most one may be given (`review.md` 004 scenario 6).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Args)]
+#[group(multiple = false)]
+struct ReviewDecision {
+    /// Stamp `last_reviewed` to today and leave the item in place.
+    #[arg(long)]
+    keep: bool,
+    /// Move the item to the Archive.
+    #[arg(long)]
+    archive: bool,
+    /// Leave the item untouched.
+    #[arg(long)]
+    skip: bool,
+}
+
+impl ReviewDecision {
+    fn into_decision(self) -> Option<review::Decision> {
+        if self.keep {
+            Some(review::Decision::Keep)
+        } else if self.archive {
+            Some(review::Decision::Archive)
+        } else if self.skip {
+            Some(review::Decision::Skip)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, clap::ValueEnum)]
@@ -429,7 +470,24 @@ fn main() -> anyhow::Result<()> {
             let message = cli::run_unarchive(&ws, &name)?;
             println!("{message}");
         }
-        Commands::Review => {
+        Commands::Review {
+            name: Some(name),
+            decision,
+        } => {
+            let ws = Workspace::discover(&cwd, home_config.as_deref())
+                .context("failed to find a PARA workspace")?;
+            let mut ui = TerminalUi;
+            if let Some(message) = review::run_one(&ws, &mut ui, &name, decision.into_decision())? {
+                println!("{message}");
+            }
+        }
+        Commands::Review {
+            name: None,
+            decision,
+        } if decision.into_decision().is_some() => {
+            anyhow::bail!("--keep/--archive/--skip requires an item name");
+        }
+        Commands::Review { name: None, .. } => {
             let ws = Workspace::discover(&cwd, home_config.as_deref())
                 .context("failed to find a PARA workspace")?;
             let mut ui = TerminalUi;
@@ -688,7 +746,64 @@ mod tests {
     fn parses_review() {
         let cli = Cli::parse_from(["ishi", "review"]);
 
-        assert_eq!(cli.command, Commands::Review);
+        assert_eq!(
+            cli.command,
+            Commands::Review {
+                name: None,
+                decision: ReviewDecision::default(),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_review_with_name_and_no_flags() {
+        let cli = Cli::parse_from(["ishi", "review", "website-redesign"]);
+
+        assert_eq!(
+            cli.command,
+            Commands::Review {
+                name: Some("website-redesign".to_string()),
+                decision: ReviewDecision::default(),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_review_with_archive_flag() {
+        let cli = Cli::parse_from(["ishi", "review", "website-redesign", "--archive"]);
+
+        assert_eq!(
+            cli.command,
+            Commands::Review {
+                name: Some("website-redesign".to_string()),
+                decision: ReviewDecision {
+                    archive: true,
+                    ..Default::default()
+                },
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_conflicting_review_decision_flags() {
+        let result =
+            Cli::try_parse_from(["ishi", "review", "website-redesign", "--keep", "--archive"]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn review_keep_with_no_name_parses_but_is_flagged_for_dispatch_rejection() {
+        let cli = Cli::parse_from(["ishi", "review", "--keep"]);
+
+        let Commands::Review { name, decision } = cli.command else {
+            panic!("expected Commands::Review");
+        };
+        assert_eq!(name, None);
+        assert!(
+            decision.into_decision().is_some(),
+            "dispatch in main() bails on (None, decision) when a decision flag is set"
+        );
     }
 
     #[test]

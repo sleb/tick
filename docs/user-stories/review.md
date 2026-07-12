@@ -123,6 +123,7 @@ order, the per-item prompt, and what `[a]rchive` does to the filesystem.
 ## User Story 004
 
 - **Summary:** Drive a single item's review decision with a flag instead of the interactive prompt
+- **Status:** ✅
 - **Depends on:** Story 002 (`[a]rchive`'s move effect), Story 003 (`[k]eep`/`[s]kip`'s effects), [status.md](status.md) Story 004 (`last_reviewed` stamping)
 
 ### Use Case

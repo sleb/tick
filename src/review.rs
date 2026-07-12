@@ -3,12 +3,32 @@ use crate::cli::{self, Ui};
 use crate::items;
 use crate::workspace::Workspace;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decision {
+    Keep,
+    Archive,
+    Skip,
+}
+
+impl Decision {
+    fn from_choice(choice: char) -> Self {
+        match choice {
+            'k' => Decision::Keep,
+            'a' => Decision::Archive,
+            's' => Decision::Skip,
+            _ => unreachable!("Ui::choose only returns a char from the options it was given"),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ReviewError {
     #[error(transparent)]
     Items(#[from] items::ItemsError),
     #[error(transparent)]
     Ui(#[from] cli::UiError),
+    #[error("\"{name}\" isn't a project or area")]
+    NotReviewable { name: String },
 }
 
 /// Walks every `Project`, then every `Area`, alphabetically within each
@@ -50,20 +70,90 @@ fn prompt_one(
         cli::format_age(item.updated_days_ago)
     );
     let choice = ui.choose(&header, &[('k', "eep"), ('a', "rchive"), ('s', "kip")])?;
+    let source_path = ws.category_dir(category).join(&item.name);
+    apply_decision(
+        ws,
+        category,
+        &item.name,
+        &source_path,
+        Decision::from_choice(choice),
+    )
+}
 
-    match choice {
-        'k' => {
-            let index_path = items::item_path(ws, category, &item.name);
+/// Applies `decision`'s effect to a located `Project`/`Area` item — the
+/// single place keep/archive/skip's filesystem effects are defined, called
+/// by both the full walk (`run`) and the single-item form (`run_one`).
+fn apply_decision(
+    ws: &Workspace,
+    category: Category,
+    name: &str,
+    source_path: &std::path::Path,
+    decision: Decision,
+) -> Result<(), ReviewError> {
+    match decision {
+        Decision::Keep => {
+            let index_path = items::item_path(ws, category, name);
             items::write_last_reviewed(&index_path)?;
         }
-        'a' => {
-            let source_path = ws.category_dir(category).join(&item.name);
-            items::mv(ws, category, &source_path, &item.name, Category::Archive)?;
+        Decision::Archive => {
+            items::mv(ws, category, source_path, name, Category::Archive)?;
         }
-        's' => {}
-        _ => unreachable!("Ui::choose only returns a char from the options it was given"),
+        Decision::Skip => {}
     }
     Ok(())
+}
+
+/// Drives one named `Project`/`Area` item's review decision without walking
+/// the rest. `flag_decision` mirrors `--keep`/`--archive`/`--skip`: `Some`
+/// applies it directly with no prompt and returns a one-line confirmation
+/// (review.md 004 scenarios 1-4); `None` falls back to the same interactive
+/// `[k]eep [a]rchive [s]kip?` prompt `run`'s walk uses, for just this one
+/// item, and returns `None` since the interactive path already communicates
+/// its own outcome via `Ui` (scenario 7). Resolves `name` via
+/// `items::locate` and rejects anything that isn't `Project` or `Area` —
+/// including no match at all — with `NotReviewable`, since neither case is
+/// something review can act on (scenario 5).
+pub fn run_one(
+    ws: &Workspace,
+    ui: &mut dyn Ui,
+    name: &str,
+    flag_decision: Option<Decision>,
+) -> Result<Option<String>, ReviewError> {
+    let located = items::locate(ws, name)?;
+    let (category, source_path) = match located {
+        Some((category @ (Category::Project | Category::Area), path)) => (category, path),
+        _ => {
+            return Err(ReviewError::NotReviewable {
+                name: name.to_string(),
+            });
+        }
+    };
+
+    match flag_decision {
+        Some(decision) => {
+            apply_decision(ws, category, name, &source_path, decision)?;
+            let message = match decision {
+                Decision::Keep => format!("Kept {name}."),
+                Decision::Archive => format!("Archived {name}."),
+                Decision::Skip => format!("Skipped {name}."),
+            };
+            Ok(Some(message))
+        }
+        None => {
+            let label = match category {
+                Category::Project => "Project",
+                Category::Area => "Area",
+                _ => unreachable!("category is Project or Area, checked above"),
+            };
+            let items = items::review_items(ws, category)?;
+            let item = items
+                .iter()
+                .find(|item| item.name == name)
+                .expect("item located above by items::locate must appear in review_items");
+            prompt_one(ws, ui, category, label, item)?;
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -292,5 +382,125 @@ mod tests {
         let path = dir.path().join("4-Archive/Projects/my-project/index.md");
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(!content.contains("last_reviewed"));
+    }
+
+    #[test]
+    fn run_one_keep_stamps_last_reviewed_and_leaves_path_untouched() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Project, "my-project", "# My Project\n").unwrap();
+        let mut ui = FakeUi::with_responses(vec![]);
+
+        let message = run_one(&ws, &mut ui, "my-project", Some(Decision::Keep)).unwrap();
+
+        let path = dir.path().join("1-Projects/my-project/index.md");
+        assert!(path.exists());
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains(&format!("last_reviewed: {today}")));
+        assert_eq!(message, Some("Kept my-project.".to_string()));
+    }
+
+    #[test]
+    fn run_one_archive_moves_item_and_leaves_last_reviewed_untouched() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Project, "my-project", "# My Project\n").unwrap();
+        let mut ui = FakeUi::with_responses(vec![]);
+
+        let message = run_one(&ws, &mut ui, "my-project", Some(Decision::Archive)).unwrap();
+
+        assert!(!dir.path().join("1-Projects/my-project").exists());
+        let path = dir.path().join("4-Archive/Projects/my-project/index.md");
+        assert!(path.exists());
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(!content.contains("last_reviewed"));
+        assert_eq!(message, Some("Archived my-project.".to_string()));
+    }
+
+    #[test]
+    fn run_one_skip_leaves_item_byte_for_byte_unchanged() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let content = "---\nlast_reviewed: 2020-01-01\n---\n# My Project\n";
+        let path = items::create(&ws, Category::Project, "my-project", content).unwrap();
+        let mut ui = FakeUi::with_responses(vec![]);
+
+        let message = run_one(&ws, &mut ui, "my-project", Some(Decision::Skip)).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
+        assert_eq!(message, Some("Skipped my-project.".to_string()));
+    }
+
+    #[test]
+    fn run_one_keep_on_area_behaves_like_project() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        items::create(&ws, Category::Area, "finances", "# Finances\n").unwrap();
+        let mut ui = FakeUi::with_responses(vec![]);
+
+        let message = run_one(&ws, &mut ui, "finances", Some(Decision::Keep)).unwrap();
+
+        let path = dir.path().join("2-Areas/finances/index.md");
+        assert!(path.exists());
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains(&format!("last_reviewed: {today}")));
+        assert_eq!(message, Some("Kept finances.".to_string()));
+    }
+
+    #[test]
+    fn run_one_on_a_resource_errors_and_leaves_it_untouched() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let content = "# Recipe Ideas\n";
+        let path = items::create(&ws, Category::Resource, "recipe-ideas", content).unwrap();
+        let mut ui = FakeUi::with_responses(vec![]);
+
+        let result = run_one(&ws, &mut ui, "recipe-ideas", Some(Decision::Keep));
+
+        assert!(matches!(result, Err(ReviewError::NotReviewable { .. })));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
+    }
+
+    #[test]
+    fn run_one_on_an_unmatched_name_errors_as_not_reviewable() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let mut ui = FakeUi::with_responses(vec![]);
+
+        let result = run_one(&ws, &mut ui, "nonexistent", Some(Decision::Keep));
+
+        assert!(matches!(result, Err(ReviewError::NotReviewable { .. })));
+    }
+
+    #[test]
+    fn run_one_with_no_flag_falls_back_to_interactive_prompt_for_just_that_item() {
+        let dir = tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let path = items::create(&ws, Category::Project, "website-redesign", "# W\n").unwrap();
+        backdate(&path, 12);
+        let mut ui = FakeUi::with_responses(vec!['k']);
+
+        let message = run_one(&ws, &mut ui, "website-redesign", None).unwrap();
+
+        assert_eq!(
+            ui.headers.borrow()[0],
+            "Project: website-redesign (last updated 12 days ago)"
+        );
+        let index_path = dir.path().join("1-Projects/website-redesign/index.md");
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+        let content = std::fs::read_to_string(&index_path).unwrap();
+        assert!(content.contains(&format!("last_reviewed: {today}")));
+        assert_eq!(message, None);
     }
 }
