@@ -9,7 +9,7 @@
 > skips confirmation prompts) for an agent to use today. What's missing is
 > packaging and instructions.
 
-## User Story 001
+## User Story 001 ✅
 
 - **Summary:** Install the `ishi` skill so an agent already knows how to manage a PARA vault
 - **Depends on:** None
@@ -34,7 +34,7 @@
 
 ---
 
-## User Story 002
+## User Story 002 ✅
 
 - **Summary:** The skill tells an agent how to orient itself in an existing vault before acting
 - **Depends on:** Story 001 (the installed skill), [status.md](status.md) Story 001, [list.md](list.md) Story 001
@@ -54,7 +54,7 @@
 
 ---
 
-## User Story 003
+## User Story 003 ✅
 
 - **Summary:** The skill tells an agent how to create notes without a human at the keyboard
 - **Depends on:** Story 001 (the installed skill), [new.md](new.md) Story 002, Story 003, Story 004, Story 005 (the non-interactive named-creation forms this documents)
@@ -79,7 +79,7 @@
 
 ---
 
-## User Story 004
+## User Story 004 ✅
 
 - **Summary:** The skill tells an agent how to file and archive items without being prompted
 - **Depends on:** Story 001 (the installed skill), [move.md](move.md) Story 001, Story 002 (the `--yes` non-interactive forms this documents)
@@ -99,7 +99,7 @@
 
 ---
 
-## User Story 005
+## User Story 005 ✅
 
 - **Summary:** The skill warns an agent away from commands that can't run unattended
 - **Depends on:** Story 001 (the installed skill), [review.md](review.md) Story 001

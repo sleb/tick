@@ -21,7 +21,7 @@
 
 ## Outstanding stories
 
-- [skill.md](user-stories/skill.md) — bundled, installable Claude Code Skill so an agent can drive `ishi` non-interactively to manage a PARA vault. No CLI changes; packaging and documentation only.
+- [skill.md](user-stories/skill.md) — bundled, installable Claude Code Skill so an agent can drive `ishi` non-interactively to manage a PARA vault. No CLI changes; packaging and documentation only. Story 001 (packaging) is done; Stories 002–005 (the skill's actual operating instructions) are still outstanding.
 
 Implementation notes for finished work (design rationale, which LLD each
 story shipped under) live in git history and in `docs/design.md`, not
